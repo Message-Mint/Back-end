@@ -1,0 +1,69 @@
+// Prisma Schema File
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionTier {
+  TRIAL
+  BEGINNER
+  PRO
+  ENTERPRISE
+}
+
+enum UserType {
+  USER
+  EMPLOYEE
+  ADMIN
+  SUPER_ADMIN
+}
+
+model User {
+  id                    String           @id @default(uuid())
+  userName              String           @unique
+  emailAddress          String           @unique
+  phoneNumber           String           @unique
+  password              String
+  firstName             String
+  lastName              String
+  nickName              String
+  isActive              Boolean          @default(true)
+  currentSubscription   SubscriptionTier @default(TRIAL)
+  registeredAt          DateTime         @default(now())
+  lastLogin             DateTime?
+  subscriptionActiveAt  DateTime
+  subscriptionExpiresAt DateTime?
+  userType              UserType         @default(USER)
+
+  // Relationships
+  emailVerification UserVerification? @relation(name: "UserEmailVerification", fields: [emailVerificationId], references: [id], onDelete: SetNull)
+  phoneVerification UserVerification? @relation(name: "UserPhoneVerification", fields: [phoneVerificationId], references: [id], onDelete: SetNull)
+
+  emailVerificationId BigInt? @unique
+  phoneVerificationId BigInt? @unique
+
+  @@index([userName, emailAddress, phoneNumber])
+  @@index([currentSubscription, subscriptionActiveAt])
+  @@map("users")
+}
+
+model UserVerification {
+  id              BigInt   @id @default(autoincrement())
+  code            String   @unique
+  isEmailVerified Boolean  @default(false)
+  isPhoneVerified Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime @default(dbgenerated("NOW() + INTERVAL '24 hours'"))
+
+  // Relationships
+  userEmail User? @relation(name: "UserEmailVerification")
+  userPhone User? @relation(name: "UserPhoneVerification")
+
+  @@index([code])
+  @@map("user_verifications")
+}
