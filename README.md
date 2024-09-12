@@ -1,85 +1,113 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🍃 Message Mint!
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## 🚀 **Endpoints**
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+### 1. **User Registration**
 
-## Description
+**Endpoint:** `POST /user/signup`  
+**Description:** Registers a new user in the system. This endpoint will create a new user and respond with a success message. 
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+**Request Body:**
 
-## Project setup
-
-```bash
-$ pnpm install
+```json
+{
+    "userName": "john_doe",
+    "emailAddress": "john.doe@example.com",
+    "phoneNumber": "+1234567890",
+    "password": "strongPassword123",
+    "firstName": "John",
+    "lastName": "Doe",
+    "nickName": "Johnny"
+}
 ```
 
-## Compile and run the project
+**Request Body Parameters:**
+- `userName` (string): **Required** - The username for the user.
+- `emailAddress` (string): **Required** - The email address of the user.
+- `phoneNumber` (string): **Required** - The phone number of the user. Ensure it follows the international format.
+- `password` (string): **Required** - The password for the user account.
+- `firstName` (string): **Optional** - The first name of the user.
+- `lastName` (string): **Optional** - The last name of the user.
+- `nickName` (string): **Optional** - A nickname for the user.
 
-```bash
-# development
-$ pnpm run start
+**Responses:**
 
-# watch mode
-$ pnpm run start:dev
+- **Success (201 Created):**
+    ```json
+    {
+        "message": "User signup successful",
+        "statusCode": 201,
+        "user": {
+            "id": "user_id",
+            "username": "john_doe",
+            "email": "john.doe@example.com",
+            "nickName": "Johnny",
+            "plan": "basic",
+            "userType": "regular",
+            "lastLogin": "2024-09-12T00:00:00.000Z"
+        }
+    }
+    ```
 
-# production mode
-$ pnpm run start:prod
+- **Error (400 Bad Request):**
+    ```json
+    {
+        "statusCode": 400,
+        "message": "Invalid registration data",
+        "error": "Bad Request"
+    }
+    ```
+
+### 2. **User Login**
+
+**Endpoint:** `POST /user/signin`  
+**Description:** Authenticates a user and provides a JWT token for access. 
+
+**Request Body:**
+
+```json
+{
+    "userName": "john_doe",
+    "password": "strongPassword123"
+}
 ```
 
-## Run tests
+**Request Body Parameters:**
+- `userName` (string): **Optional** - The username for login. Use either `userName` or `emailAddress`.
+- `emailAddress` (string): **Optional** - The email address for login. Use either `userName` or `emailAddress`.
+- `password` (string): **Required** - The password for the user account.
 
-```bash
-# unit tests
-$ pnpm run test
+**Responses:**
 
-# e2e tests
-$ pnpm run test:e2e
+- **Success (200 OK):**
+    ```json
+    {
+        "message": "User signin successful",
+        "statusCode": 200,
+        "accessToken": "your_jwt_token"
+    }
+    ```
 
-# test coverage
-$ pnpm run test:cov
-```
+- **Error (401 Unauthorized):**
+    ```json
+    {
+        "statusCode": 401,
+        "message": "Unauthorized",
+        "error": "Invalid credentials"
+    }
+    ```
 
-## Resources
+## 🛠️ **Error Handling**
 
-Check out a few resources that may come in handy when working with NestJS:
+- **400 Bad Request:** Indicates that the request is malformed or missing required fields.
+- **401 Unauthorized:** Indicates that the authentication credentials are invalid or missing.
+- **500 Internal Server Error:** Indicates that an unexpected error occurred on the server side.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 🧪 **Testing**
 
-## Support
+You can test these endpoints using tools like Postman or Insomnia. Ensure that your server is running and accessible, and use the provided request bodies to verify the functionality.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## 📌 **Notes**
 
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Always ensure the `phoneNumber` follows international standards.
+- The `JWT_SECRET` and other sensitive environment variables should be stored securely and not exposed in public repositories.
