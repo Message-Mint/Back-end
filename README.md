@@ -26,8 +26,8 @@
 - `emailAddress` (string): **Required** - The email address of the user.
 - `phoneNumber` (string): **Required** - The phone number of the user. Ensure it follows the international format.
 - `password` (string): **Required** - The password for the user account.
-- `firstName` (string): **Optional** - The first name of the user.
-- `lastName` (string): **Optional** - The last name of the user.
+- `firstName` (string): **Required** - The first name of the user.
+- `lastName` (string): **Required** - The last name of the user.
 - `nickName` (string): **Optional** - A nickname for the user.
 
 **Responses:**
@@ -84,7 +84,15 @@
     {
         "message": "User signin successful",
         "statusCode": 200,
-        "accessToken": "your_jwt_token"
+        "user": {
+            "id": "user_id",
+            "username": "john_doe",
+            "email": "john.doe@example.com",
+            "nickName": "Johnny",
+            "plan": "basic",
+            "userType": "regular",
+            "lastLogin": "2024-09-12T00:00:00.000Z"
+        }
     }
     ```
 
