@@ -31,18 +31,18 @@ model User {
   password              String
   firstName             String
   lastName              String
-  nickName              String
+  nickName              String?
   isActive              Boolean          @default(true)
   currentSubscription   SubscriptionTier @default(TRIAL)
   registeredAt          DateTime         @default(now())
   lastLogin             DateTime?
-  subscriptionActiveAt  DateTime
+  subscriptionActiveAt  DateTime         @default(now()) // Default to now
   subscriptionExpiresAt DateTime?
   userType              UserType         @default(USER)
 
   // Relationships
-  emailVerification UserVerification? @relation(name: "UserEmailVerification", fields: [emailVerificationId], references: [id], onDelete: SetNull)
-  phoneVerification UserVerification? @relation(name: "UserPhoneVerification", fields: [phoneVerificationId], references: [id], onDelete: SetNull)
+  emailVerification UserVerification? @relation(name: "UserEmailVerification", fields: [emailVerificationId], references: [id], onDelete: Cascade)
+  phoneVerification UserVerification? @relation(name: "UserPhoneVerification", fields: [phoneVerificationId], references: [id], onDelete: Cascade)
 
   emailVerificationId BigInt? @unique
   phoneVerificationId BigInt? @unique

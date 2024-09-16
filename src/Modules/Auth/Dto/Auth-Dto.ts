@@ -34,3 +34,14 @@ export class UserLoginDto {
     @IsString()
     password: string;
 }
+
+export class forgotPasswordDto {
+    @IsString()
+    username: string;
+
+    @IsString()
+    oldPassword: string;
+
+    @IsString()
+    newPassword: string;
+}

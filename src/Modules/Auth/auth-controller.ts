@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post, Res, HttpStatus } from "@nestjs/common";
-import { UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
+import { Body, Controller, Get, Post, Res, HttpStatus, UseGuards } from "@nestjs/common";
+import { forgotPasswordDto, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { AuthService } from "./auth-service";
 import { Response as ExpressResponse } from 'express';
+import { JwtAuthGuard } from "./jwt-auth-guard";
 
 @Controller('user')
 export class AuthController {
@@ -31,6 +32,20 @@ export class AuthController {
     async signin(@Res() res: ExpressResponse, @Body() signInData: UserLoginDto) {
         try {
             const result = await this.auth.loginUser(signInData, res); // Assuming login method exists in AuthService
+            return res.status(HttpStatus.OK).json(result);
+        } catch (error) {
+            if (error.response) {
+                return res.status(error.status).json(error.response);
+            }
+            return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
+        }
+    }
+
+    @Post('forgot-password')
+    @UseGuards(JwtAuthGuard)
+    async forgotPassword(@Res() res: ExpressResponse, @Body() forgotPasswordData: forgotPasswordDto) {
+        try {
+            const result = await this.auth.chnageUserPassword(forgotPasswordData, res); // Assuming login method exists in AuthService
             return res.status(HttpStatus.OK).json(result);
         } catch (error) {
             if (error.response) {

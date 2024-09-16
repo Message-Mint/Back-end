@@ -1,5 +1,5 @@
-import { Injectable, BadRequestException, ConflictException, InternalServerErrorException } from "@nestjs/common";
-import { UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
+import { Injectable, BadRequestException, ConflictException, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
+import { forgotPasswordDto, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { validateRegistrationData } from "src/Utils/validateRegistrationData";
 import { UserRepository } from "../Common/Repositorys/user-repository";
 import * as bcrypt from 'bcrypt';
@@ -176,5 +176,22 @@ export class AuthService {
             throw error;
         }
         throw new InternalServerErrorException("Authentication failed");
+    }
+
+
+    async chnageUserPassword(newPassData: forgotPasswordDto, res: ExpressResponse) {
+        if (!newPassData || Object.keys(newPassData).length === 0) {
+            throw new BadRequestException("Invalid Forgot Password data");
+        }
+
+        const isUserValid = await this.userDBRepo.findUserByUserName(newPassData.username);
+
+        if (!isUserValid) {
+            throw new UnauthorizedException("User doesn't Exist on Database")
+        }
+
+        await this.validateUserLogin(isUserValid, newPassData.newPassword);
+
+        return await this.userDBRepo.updateUserById(isUserValid.id, { password: await this.hashPassword(newPassData.newPassword) })
     }
 }

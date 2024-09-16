@@ -18,11 +18,13 @@ module.exports = {
   ignorePatterns: ['.eslintrc.js'],
   rules: {
     "endOfLine": "auto", // Fix for Delete `CR` Pop up Error VS Code
+
     // TypeScript specific rules
     '@typescript-eslint/interface-name-prefix': 'off',
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
+    '@typescript-eslint/no-unused-vars': 'error', // Enforce error for unused variables
 
     // Prettier rules for clean code
     'prettier/prettier': [
@@ -40,7 +42,6 @@ module.exports = {
 
     // Additional clean code rules
     'no-console': 'error', // Disallow console.log, but allow console.warn and console.error
-    'no-unused-vars': 'error', // Disallow unused variables
     'no-var': 'error', // Enforce let/const instead of var
     'prefer-const': 'error', // Suggest using const if variables are not reassigned
     'no-multi-spaces': 'error', // Disallow multiple spaces
