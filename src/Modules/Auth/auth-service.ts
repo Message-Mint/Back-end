@@ -194,4 +194,64 @@ export class AuthService {
 
         return await this.userDBRepo.updateUserById(isUserValid.id, { password: await this.hashPassword(newPassData.newPassword) })
     }
+
+    async verifyToken(token: string) {
+        try {
+            this.logger.log('Verifying token', 'AuthService');
+
+            // Decode the token
+            const decodedToken = this.jwt.verify(token);
+
+            if (!decodedToken) {
+                throw new UnauthorizedException('Invalid token');
+            }
+
+            // Extract user ID from the token
+            const userId = decodedToken.sub;
+
+            // Fetch the latest user data from the database
+            const user = await this.userDBRepo.findUserById(userId);
+
+            if (!user) {
+                throw new UnauthorizedException('User not found');
+            }
+
+            if (!user.isActive) {
+                throw new UnauthorizedException('User account is inactive');
+            }
+
+            // Check if the subscription is still valid
+            const now = new Date();
+            if (user.subscriptionExpiresAt && user.subscriptionExpiresAt < now) {
+                // Optionally, you might want to update the user's subscription status here
+                await this.userDBRepo.updateUserById(userId, {
+                    currentSubscription: 'TRIAL',
+                    subscriptionExpiresAt: null
+                });
+                user.currentSubscription = 'TRIAL';
+                user.subscriptionExpiresAt = null;
+            }
+
+            // Update last login time
+            await this.userDBRepo.updateUserById(userId, { lastLogin: now });
+
+            // Return user data (excluding sensitive information)
+            return {
+                message: 'Token is valid',
+                statusCode: 200,
+                user: {
+                    id: user.id,
+                    username: user.userName,
+                    email: user.emailAddress,
+                    nickName: user.nickName,
+                    plan: user.currentSubscription,
+                    userType: user.userType,
+                    lastLogin: now
+                }
+            };
+        } catch (error) {
+            this.logger.error(`Token verification failed: ${error.message}`, error.stack, 'AuthService');
+            throw new UnauthorizedException('Invalid token');
+        }
+    }
 }

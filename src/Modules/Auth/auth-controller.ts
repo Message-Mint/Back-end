@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Res, HttpStatus, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, Res, HttpStatus, UseGuards, Req, UnauthorizedException } from "@nestjs/common";
 import { forgotPasswordDto, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { AuthService } from "./auth-service";
 import { Response as ExpressResponse } from 'express';
@@ -52,6 +52,21 @@ export class AuthController {
                 return res.status(error.status).json(error.response);
             }
             return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
+        }
+    }
+
+    @Post('verify-token')
+    @UseGuards(JwtAuthGuard)
+    async verifyToken(@Req() req, @Res() res: ExpressResponse) {
+        try {
+            const token = req.cookies.jwt; // Assuming the token is in a cookie named 'jwt'
+            const result = await this.auth.verifyToken(token);
+            return res.status(HttpStatus.OK).json(result);
+        } catch (error) {
+            if (error instanceof UnauthorizedException) {
+                return res.status(HttpStatus.UNAUTHORIZED).json({ message: error.message });
+            }
+            return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Internal server error' });
         }
     }
 }
