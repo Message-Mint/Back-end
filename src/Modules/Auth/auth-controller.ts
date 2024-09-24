@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Post, Res, HttpStatus, UseGuards, Req, UnauthorizedException } from "@nestjs/common";
-import { forgotPasswordDto, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
+import { forgotPasswordDto, JwtPayload, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { AuthService } from "./auth-service";
 import { Response as ExpressResponse } from 'express';
+import { Request as ExpressRequest } from 'express';
 import { JwtAuthGuard } from "./jwt-auth-guard";
+import { AuthGuard } from "@nestjs/passport";
 
 @Controller('user')
 export class AuthController {
@@ -29,7 +31,7 @@ export class AuthController {
     }
 
     @Post('signin')
-    async signin(@Res() res: ExpressResponse, @Body() signInData: UserLoginDto) {
+    async signin(@Res({ passthrough: true }) res: ExpressResponse, @Body() signInData: UserLoginDto) {
         try {
             const result = await this.auth.loginUser(signInData, res); // Assuming login method exists in AuthService
             return res.status(HttpStatus.OK).json(result);
@@ -57,11 +59,23 @@ export class AuthController {
 
     @Post('verify-token')
     @UseGuards(JwtAuthGuard)
-    async verifyToken(@Req() req, @Res() res: ExpressResponse) {
+    async verifyToken(@Req() req: ExpressRequest, @Res() res: ExpressResponse) {
         try {
-            const token = req.cookies.jwt; // Assuming the token is in a cookie named 'jwt'
-            const result = await this.auth.verifyToken(token);
-            return res.status(HttpStatus.OK).json(result);
+            // The user object is now attached to the request by JwtAuthGuard
+            const user = req.user as JwtPayload;
+
+            if (!user) {
+                return res.status(HttpStatus.UNAUTHORIZED).json({ message: 'Invalid token' });
+            }
+
+            // You can perform additional verification here if needed
+            const result = await this.auth.verifyTokenData(user);
+
+            return res.status(HttpStatus.OK).json({
+                message: 'Token is valid',
+                user,
+                ...result // Include any additional information from verifyToken method
+            });
         } catch (error) {
             if (error instanceof UnauthorizedException) {
                 return res.status(HttpStatus.UNAUTHORIZED).json({ message: error.message });

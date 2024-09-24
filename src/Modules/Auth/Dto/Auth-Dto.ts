@@ -45,3 +45,11 @@ export class forgotPasswordDto {
     @IsString()
     newPassword: string;
 }
+
+export interface JwtPayload {
+    userId: string;
+    username: string;
+    email: string;
+    plan: string;
+    userType: string;
+}

@@ -1,5 +1,5 @@
 import { Injectable, BadRequestException, ConflictException, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
-import { forgotPasswordDto, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
+import { forgotPasswordDto, JwtPayload, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { validateRegistrationData } from "src/Utils/validateRegistrationData";
 import { UserRepository } from "../Common/Repositorys/user-repository";
 import * as bcrypt from 'bcrypt';
@@ -19,6 +19,15 @@ export class AuthService {
         private readonly env: ConfigService,
         private readonly logger: LoggerService
     ) { }
+
+    async validateUser(username: string, password: string): Promise<any> {
+        const user = await this.userDBRepo.findUserByUserName(username);
+        if (user && user.password === password) {
+            const { password, ...result } = user;
+            return result;
+        }
+        return null;
+    }
 
     async registerNewUser(registrationData: UserRegistrationDto, res: ExpressResponse) {
         try {
@@ -78,7 +87,7 @@ export class AuthService {
             await this.userDBRepo.updateUserById(user.id, { lastLogin: new Date() });
             this.logger.log(`User logged in successfully: ${user.userName}`, 'AuthService');
 
-            return this.setJwtTokentoBrowser(user, "signin", res);
+            return await this.setJwtTokentoBrowser(user, "signin", res);
         } catch (error) {
             this.logger.error(`Login failed: ${error.message}`, error.stack, 'AuthService');
             this.handleAuthError(error);
@@ -130,8 +139,13 @@ export class AuthService {
         }
     }
 
-    private async setJwtTokentoBrowser(userData: UserEntity, type: "signin" | "signup", res: ExpressResponse) {
+    private async setJwtTokentoBrowser(
+        userData: UserEntity,
+        type: "signin" | "signup",
+        res: ExpressResponse
+    ) {
         try {
+            // Create JWT payload
             const payload = {
                 sub: userData.id,
                 username: userData.userName,
@@ -141,20 +155,26 @@ export class AuthService {
                 userType: userData.userType,
             };
 
+            // Generate JWT with a 7-day expiration
             const accessToken = this.jwt.sign(payload, {
                 expiresIn: '7d',
             });
 
-            res.cookie('jwt', accessToken, {
+            res.setHeader('Set-Cookie', `authToken=${accessToken}; Path=/; HttpOnly; Secure; SameSite=Strict`);
+            // Set JWT as HttpOnly, Secure, and SameSite cookie in the response
+            res.cookie('authToken', accessToken, {
                 httpOnly: true,
-                secure: this.env.get<string>("NODE_ENV") === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+                secure: this.env.get<string>("NODE_ENV") === 'production' ? true : false,
+                sameSite: this.env.get<string>("NODE_ENV") === 'production' ? "strict" : "none", // Or 'Strict' or 'None' depending on your needs
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+                path: '/',
             });
 
+            // Return success message and user info
             return {
                 message: `User ${type} successful`,
                 statusCode: 200,
+                token: accessToken,
                 user: {
                     id: userData.id,
                     username: userData.userName,
@@ -162,14 +182,16 @@ export class AuthService {
                     nickName: userData.nickName,
                     plan: userData.currentSubscription,
                     userType: userData.userType,
-                    lastLogin: new Date()
-                }
+                    lastLogin: new Date(),
+                },
             };
         } catch (error) {
+            // Log the error and throw an internal server error exception
             this.logger.error(`Failed to set JWT token: ${error.message}`, error.stack, 'AuthService');
-            throw new InternalServerErrorException("Authentication failed");
+            throw new InternalServerErrorException('Authentication failed. Please try again later.');
         }
     }
+
 
     private handleAuthError(error: any) {
         if (error instanceof BadRequestException || error instanceof ConflictException) {
@@ -195,47 +217,43 @@ export class AuthService {
         return await this.userDBRepo.updateUserById(isUserValid.id, { password: await this.hashPassword(newPassData.newPassword) })
     }
 
-    async verifyToken(token: string) {
+    async verifyTokenData(tokenPayload: JwtPayload) {
         try {
-            this.logger.log('Verifying token', 'AuthService');
+            this.logger.log('Verifying token data', 'AuthService');
 
-            // Decode the token
-            const decodedToken = this.jwt.verify(token);
-
-            if (!decodedToken) {
-                throw new UnauthorizedException('Invalid token');
-            }
-
-            // Extract user ID from the token
-            const userId = decodedToken.sub;
-
-            // Fetch the latest user data from the database
-            const user = await this.userDBRepo.findUserById(userId);
+            // Fetch the user from the database
+            const user = await this.userDBRepo.findUserById(tokenPayload.userId);
 
             if (!user) {
                 throw new UnauthorizedException('User not found');
             }
 
+            // Check if the email in the token matches the user's email
+            if (user.emailAddress !== tokenPayload.email) {
+                throw new UnauthorizedException('Email mismatch');
+            }
+
+            // Check if the username in the token matches the user's username
+            if (user.userName !== tokenPayload.username) {
+                throw new UnauthorizedException('Username mismatch');
+            }
+
+            // Check if the plan in the token matches the user's current subscription
+            if (user.currentSubscription !== tokenPayload.plan) {
+                throw new UnauthorizedException('Subscription plan mismatch');
+            }
+
+            // Check if the userType in the token matches the user's userType
+            if (user.userType !== tokenPayload.userType) {
+                throw new UnauthorizedException('User type mismatch');
+            }
+
+            // Check if the user's account is active
             if (!user.isActive) {
-                throw new UnauthorizedException('User account is inactive');
+                throw new UnauthorizedException('Account is not active');
             }
 
-            // Check if the subscription is still valid
-            const now = new Date();
-            if (user.subscriptionExpiresAt && user.subscriptionExpiresAt < now) {
-                // Optionally, you might want to update the user's subscription status here
-                await this.userDBRepo.updateUserById(userId, {
-                    currentSubscription: 'TRIAL',
-                    subscriptionExpiresAt: null
-                });
-                user.currentSubscription = 'TRIAL';
-                user.subscriptionExpiresAt = null;
-            }
-
-            // Update last login time
-            await this.userDBRepo.updateUserById(userId, { lastLogin: now });
-
-            // Return user data (excluding sensitive information)
+            // If all checks pass, return the validated user data
             return {
                 message: 'Token is valid',
                 statusCode: 200,
@@ -246,12 +264,14 @@ export class AuthService {
                     nickName: user.nickName,
                     plan: user.currentSubscription,
                     userType: user.userType,
-                    lastLogin: now
+                    lastLogin: user.lastLogin,
+                    isEmailVerified: user?.emailVerification?.isEmailVerified,
+                    isActive: user.isActive
                 }
             };
         } catch (error) {
             this.logger.error(`Token verification failed: ${error.message}`, error.stack, 'AuthService');
-            throw new UnauthorizedException('Invalid token');
+            throw error; // Re-throw the error to be handled by the calling method
         }
     }
 }
