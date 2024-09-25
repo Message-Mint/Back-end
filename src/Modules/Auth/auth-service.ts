@@ -145,14 +145,18 @@ export class AuthService {
         res: ExpressResponse
     ) {
         try {
-            // Create JWT payload
             const payload = {
                 sub: userData.id,
                 username: userData.username,
                 nickName: userData.nickname,
                 email: userData.email,
                 plan: userData.currentSubscription,
-                userType: userData.role,
+                role: userData.role,
+                firstName: userData.firstName,
+                lastName: userData.lastName,
+                isActive: userData.isActive,
+                subscriptionStartDate: userData.subscriptionStartDate,
+                subscriptionEndDate: userData.subscriptionEndDate
             };
 
             // Generate JWT with a 7-day expiration
@@ -181,7 +185,7 @@ export class AuthService {
                     email: userData.email,
                     nickName: userData.nickname,
                     plan: userData.currentSubscription,
-                    userType: userData.role,
+                    role: userData.role,
                     lastLogin: new Date(),
                 },
             };

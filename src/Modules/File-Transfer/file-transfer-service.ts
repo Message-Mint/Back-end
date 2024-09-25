@@ -110,6 +110,9 @@ export class FileService {
                 }
             }
         } catch (error) {
+            if (error.code === 'ENOENT') {
+                return;
+            }
             console.error('Error cleaning up temp files:', error);
         }
     }
@@ -130,6 +133,9 @@ export class FileService {
                 .filter(dirent => dirent.isDirectory())
                 .map(dirent => dirent.name);
         } catch (error) {
+            if (error.code === 'ENOENT') {
+                return [];
+            }
             console.error('Error reading user directories:', error);
             return [];
         }

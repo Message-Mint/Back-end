@@ -90,7 +90,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     private validatePayloadStructure(payload: any) {
-        const requiredFields = ['sub', 'username', 'email', 'role', 'subscription'];
+        const requiredFields = ['sub', 'username', 'email', 'role', 'subscriptionEndDate'];
         for (const field of requiredFields) {
             if (!(field in payload)) {
                 throw new UnauthorizedException(`Missing required field: ${field}`);

@@ -12,7 +12,11 @@ export class FileController {
     constructor(private readonly fileService: FileService) { }
 
     @Post('upload')
-    @UseInterceptors(FileInterceptor('file'))
+    @UseInterceptors(FileInterceptor('file', {
+        limits: {
+            fileSize: Number(process.env.MAX_FILE_SIZE_MB) * 1024 * 1024 || 10 * 1024 * 1024
+        }
+    }))
     async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req: AuthenticatedRequest) {
         if (!file) {
             throw new BadRequestException('No file uploaded');
