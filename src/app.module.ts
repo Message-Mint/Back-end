@@ -6,6 +6,9 @@ import { PrismaModule } from './Common/Database-Management/Prisma/prisma-module'
 import { CommonModule } from './Common/common-module';
 import { InstanceModule } from './Modules/Instance/instance-module';
 import { FileModule } from './Modules/File-Transfer/file-transfer-module';
+import { WhatsappModule } from './Modules/Whatsapp/whatsapp-module';
+import { PostgresSQLModule } from './Common/Database-Management/PostgreSQL/postgresql-module';
+import { MongoDBModule } from './Common/Database-Management/MongoDB/mongoDB-module';
 
 @Module({
     imports: [
@@ -16,9 +19,12 @@ import { FileModule } from './Modules/File-Transfer/file-transfer-module';
         AuthModule,
         HelperModule,
         PrismaModule,
+        PostgresSQLModule,
+        MongoDBModule,
         CommonModule,
         InstanceModule,
-        FileModule
+        FileModule,
+        WhatsappModule
     ],
 })
 export class AppModule { }

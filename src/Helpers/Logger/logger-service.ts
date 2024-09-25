@@ -156,6 +156,7 @@ ${this.formatResponseBody(responseBody)}
         }
     }
 
+
     log(message: string, context?: string) {
         this.logWithLevel(LogLevel.INFO, message, { context });
     }
@@ -174,6 +175,18 @@ ${this.formatResponseBody(responseBody)}
 
     verbose(message: string, context?: string) {
         this.logWithLevel(LogLevel.VERBOSE, message, { context });
+    }
+
+    info(message: any, ...optionalParams: any[]) {
+        this.logWithLevel(LogLevel.INFO, message, { context: optionalParams[0] });
+    }
+
+    trace(message: any, ...optionalParams: any[]) {
+        this.logWithLevel(LogLevel.SILLY, message, { context: optionalParams[0] });
+    }
+
+    silent(message: any, ...optionalParams: any[]) {
+        // Do nothing for silent logging
     }
 
     logWithLevel(level: LogLevel, message: string, metadata?: LogMetadata) {
