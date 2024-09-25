@@ -4,7 +4,7 @@ import { PrismaService } from "./Database-Management/Prisma/prisma-service";
 import { InstanceRepository } from "./Repositorys/instance-repository";
 
 @Module({
-    providers: [UserRepository, PrismaService],
+    providers: [PrismaService, UserRepository, InstanceRepository],
     exports: [UserRepository, InstanceRepository]
 })
 

@@ -5,6 +5,7 @@ import { HelperModule } from './Helpers/helper-module';
 import { PrismaModule } from './Common/Database-Management/Prisma/prisma-module';
 import { CommonModule } from './Common/common-module';
 import { InstanceModule } from './Modules/Instance/instance-module';
+import { FileModule } from './Modules/File-Transfer/file-transfer-module';
 
 @Module({
     imports: [
@@ -16,7 +17,8 @@ import { InstanceModule } from './Modules/Instance/instance-module';
         HelperModule,
         PrismaModule,
         CommonModule,
-        InstanceModule
+        InstanceModule,
+        FileModule
     ],
 })
 export class AppModule { }

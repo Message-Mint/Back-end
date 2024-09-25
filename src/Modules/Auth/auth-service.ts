@@ -239,12 +239,12 @@ export class AuthService {
             }
 
             // Check if the plan in the token matches the user's current subscription
-            if (user.currentSubscription !== tokenPayload.plan) {
+            if (user.currentSubscription !== tokenPayload.subscription) {
                 throw new UnauthorizedException('Subscription plan mismatch');
             }
 
             // Check if the userType in the token matches the user's userType
-            if (user.role !== tokenPayload.userType) {
+            if (user.role !== tokenPayload.role) {
                 throw new UnauthorizedException('User type mismatch');
             }
 

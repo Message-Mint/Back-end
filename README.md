@@ -379,3 +379,137 @@ Example error response:
 - The `environment` field must be either "DEVELOPMENT" or "PRODUCTION".
 - The `sessionStorage` field must be one of "REDIS", "POSTGRESQL", or "MONGODB".
 
+Here's a comprehensive README.md section for the File Service endpoints based on the provided controller code:
+
+# File Service API
+
+The File Service API provides endpoints for managing file uploads, downloads, and user file management. All endpoints are protected by JWT authentication.
+
+## Endpoints
+
+### Upload File
+
+Uploads a file to the server for the authenticated user.
+
+- **URL**: `/files/upload`
+- **Method**: `POST`
+- **Auth**: Required
+- **Content-Type**: `multipart/form-data`
+
+#### Request Body
+
+- `file`: The file to be uploaded (form-data)
+
+#### Success Response (200 OK)
+
+```json
+{
+  "fileName": "unique_file_name.ext"
+}
+```
+
+#### Error Response (400 Bad Request)
+
+```json
+{
+  "statusCode": 400,
+  "message": "No file uploaded",
+  "error": "Bad Request"
+}
+```
+
+### Get User Files
+
+Retrieves all files for a specific user.
+
+- **URL**: `/files/user/:userId`
+- **Method**: `GET`
+- **Auth**: Required
+
+#### Success Response (200 OK)
+
+```json
+[
+  {
+    "fileName": "file1.ext",
+    "originalName": "original_file1.ext",
+    "userId": "user123",
+    "uploadDate": "2024-09-25T12:00:00Z"
+  },
+  {
+    "fileName": "file2.ext",
+    "originalName": "original_file2.ext",
+    "userId": "user123",
+    "uploadDate": "2024-09-26T14:30:00Z"
+  }
+]
+```
+
+### Download File
+
+Downloads a specific file for the authenticated user.
+
+- **URL**: `/files/file/:fileName`
+- **Method**: `GET`
+- **Auth**: Required
+
+#### Success Response
+
+The file will be sent as a downloadable attachment.
+
+#### Headers
+
+```
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="filename.ext"
+```
+
+### Delete File
+
+Deletes a specific file for the authenticated user.
+
+- **URL**: `/files/:fileName`
+- **Method**: `DELETE`
+- **Auth**: Required
+
+#### Success Response (200 OK)
+
+```json
+{
+  "message": "File deleted successfully"
+}
+```
+
+### Get All User Directories
+
+Retrieves a list of all user directories (admin function).
+
+- **URL**: `/files/all-users`
+- **Method**: `GET`
+- **Auth**: Required (admin only)
+
+#### Success Response (200 OK)
+
+```json
+[
+  "user1",
+  "user2",
+  "user3"
+]
+```
+
+## Error Handling
+
+All endpoints may return the following error responses:
+
+- `400 Bad Request`: Invalid request or missing file.
+- `401 Unauthorized`: Invalid or missing authentication.
+- `403 Forbidden`: Insufficient permissions.
+- `404 Not Found`: File or user not found.
+- `500 Internal Server Error`: Unexpected server error.
+
+## Notes
+
+- All requests must include a valid JWT token in the Authorization header.
+- File uploads are limited to a maximum size (configurable on the server).
+- User can only access and manage their own files.
