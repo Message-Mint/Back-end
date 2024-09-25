@@ -1,27 +1,25 @@
-import { SubscriptionTier, UserType } from '@prisma/client';
+import { SubscriptionTier, UserRole } from '@prisma/client';
 
 export interface UserEntity {
     id: string;
-    userName: string;
-    emailAddress: string;
-    phoneNumber: string;
+    username: string;
+    email: string;
+    phone: string;
     password: string;
-    firstName?: string;
-    lastName?: string;
-    nickName?: string
-    isActive?: boolean;
+    firstName: string;
+    lastName: string;
+    nickname?: string;
+    isActive: boolean;
     currentSubscription: SubscriptionTier;
     registeredAt: Date;
     lastLogin?: Date | null;
-    subscriptionActiveAt: Date;
-    subscriptionExpiresAt?: Date | null;
-    userType?: UserType;
+    subscriptionStartDate: Date;  // Changed from subscriptionActiveAt
+    subscriptionEndDate?: Date | null;  // Changed from subscriptionExpiresAt
+    role: UserRole;
 
     // Relationships
     emailVerification?: UserVerificationEntity | null;
     phoneVerification?: UserVerificationEntity | null;
-    emailVerificationId?: bigint | null;
-    phoneVerificationId?: bigint | null;
 }
 
 export interface UserVerificationEntity {
@@ -29,8 +27,12 @@ export interface UserVerificationEntity {
     code: string;
     isEmailVerified: boolean;
     isPhoneVerified: boolean;
+    createdAt: Date;
+    expiresAt: Date;
 
     // Relationships
     userEmail?: UserEntity | null;
     userPhone?: UserEntity | null;
+    userEmailId?: string | null;
+    userPhoneId?: string | null;
 }

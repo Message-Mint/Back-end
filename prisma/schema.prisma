@@ -16,39 +16,47 @@ enum SubscriptionTier {
   ENTERPRISE
 }
 
-enum UserType {
-  USER
+enum UserRole {
+  CUSTOMER
   EMPLOYEE
   ADMIN
   SUPER_ADMIN
 }
 
+enum InstanceEnvironment {
+  DEVELOPMENT
+  PRODUCTION
+}
+
+enum SessionStorageType {
+  REDIS
+  POSTGRESQL
+  MONGODB
+}
+
 model User {
   id                    String           @id @default(uuid())
-  userName              String           @unique
-  emailAddress          String           @unique
-  phoneNumber           String           @unique
+  username              String           @unique
+  email                 String           @unique
+  phone                 String           @unique
   password              String
   firstName             String
   lastName              String
-  nickName              String?
+  nickname              String?
   isActive              Boolean          @default(true)
   currentSubscription   SubscriptionTier @default(TRIAL)
   registeredAt          DateTime         @default(now())
   lastLogin             DateTime?
-  subscriptionActiveAt  DateTime         @default(now()) // Default to now
-  subscriptionExpiresAt DateTime?
-  userType              UserType         @default(USER)
+  subscriptionStartDate DateTime         @default(now())
+  subscriptionEndDate   DateTime?
+  role                  UserRole         @default(CUSTOMER)
 
-  // Relationships
-  emailVerification UserVerification? @relation(name: "UserEmailVerification", fields: [emailVerificationId], references: [id], onDelete: Cascade)
-  phoneVerification UserVerification? @relation(name: "UserPhoneVerification", fields: [phoneVerificationId], references: [id], onDelete: Cascade)
+  emailVerification UserVerification? @relation("EmailVerification")
+  phoneVerification UserVerification? @relation("PhoneVerification")
+  instances         Instance[]
 
-  emailVerificationId BigInt? @unique
-  phoneVerificationId BigInt? @unique
-
-  @@index([userName, emailAddress, phoneNumber])
-  @@index([currentSubscription, subscriptionActiveAt])
+  @@index([username, email, phone])
+  @@index([currentSubscription, subscriptionStartDate])
   @@map("users")
 }
 
@@ -60,10 +68,28 @@ model UserVerification {
   createdAt       DateTime @default(now())
   expiresAt       DateTime @default(dbgenerated("NOW() + INTERVAL '24 hours'"))
 
-  // Relationships
-  userEmail User? @relation(name: "UserEmailVerification")
-  userPhone User? @relation(name: "UserPhoneVerification")
+  userEmail   User?   @relation("EmailVerification", fields: [userEmailId], references: [id], onDelete: Cascade)
+  userEmailId String? @unique
+  userPhone   User?   @relation("PhoneVerification", fields: [userPhoneId], references: [id], onDelete: Cascade)
+  userPhoneId String? @unique
 
   @@index([code])
   @@map("user_verifications")
+}
+
+model Instance {
+  id               BigInt              @id @default(autoincrement())
+  name             String              @unique
+  businessName     String?
+  businessWhatsApp String?
+  businessCountry  String?
+  isActive         Boolean
+  environment      InstanceEnvironment
+  sessionStorage   SessionStorageType
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  @@index([name, isActive])
+  @@map("instances")
 }

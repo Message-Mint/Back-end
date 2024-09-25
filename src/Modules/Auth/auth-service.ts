@@ -1,15 +1,15 @@
 import { Injectable, BadRequestException, ConflictException, InternalServerErrorException, UnauthorizedException } from "@nestjs/common";
 import { forgotPasswordDto, JwtPayload, UserLoginDto, UserRegistrationDto } from "./Dto/Auth-Dto";
 import { validateRegistrationData } from "src/Utils/validateRegistrationData";
-import { UserRepository } from "../Common/Repositorys/user-repository";
+import { UserRepository } from "../../Common/Repositorys/user-repository";
 import * as bcrypt from 'bcrypt';
 import { determineSaltRounds } from "src/Utils/determineSaltRounds";
 import { Prisma, User } from "@prisma/client";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import { Response as ExpressResponse } from 'express';
-import { UserEntity } from "../Common/Entities/user-entities";
-import { LoggerService } from "../Helpers/Logger/logger-service";
+import { UserEntity } from "../../Common/Entities/user-entities";
+import { LoggerService } from "../../Helpers/Logger/logger-service";
 
 @Injectable()
 export class AuthService {
@@ -45,18 +45,18 @@ export class AuthService {
             const nickName = registrationData.nickName || `${registrationData.firstName} ${registrationData.lastName}`;
 
             const userDataWithHashedPassword: Prisma.UserCreateInput = {
-                userName: registrationData.userName.trim(),
-                emailAddress: registrationData.emailAddress.toLowerCase().trim(),
-                phoneNumber: registrationData.phoneNumber.trim(),
+                username: registrationData.userName.trim(),
+                email: registrationData.emailAddress.toLowerCase().trim(),
+                phone: registrationData.phoneNumber.trim(),
                 password: hashedPassword,
                 firstName: registrationData.firstName.trim(),
                 lastName: registrationData.lastName.trim(),
-                nickName: nickName.trim(),
-                subscriptionActiveAt: new Date(),
+                nickname: nickName.trim(),
+                subscriptionStartDate: new Date(),
             };
 
             const newUser = await this.userDBRepo.createUser(userDataWithHashedPassword);
-            this.logger.log(`User registered successfully: ${newUser.userName}`, 'AuthService');
+            this.logger.log(`User registered successfully: ${newUser.username}`, 'AuthService');
 
             return await this.setJwtTokentoBrowser(newUser, "signup", res);
         } catch (error) {
@@ -85,7 +85,7 @@ export class AuthService {
             await this.validateUserLogin(user, password);
 
             await this.userDBRepo.updateUserById(user.id, { lastLogin: new Date() });
-            this.logger.log(`User logged in successfully: ${user.userName}`, 'AuthService');
+            this.logger.log(`User logged in successfully: ${user.username}`, 'AuthService');
 
             return await this.setJwtTokentoBrowser(user, "signin", res);
         } catch (error) {
@@ -148,11 +148,11 @@ export class AuthService {
             // Create JWT payload
             const payload = {
                 sub: userData.id,
-                username: userData.userName,
-                nickName: userData.nickName,
-                email: userData.emailAddress,
+                username: userData.username,
+                nickName: userData.nickname,
+                email: userData.email,
                 plan: userData.currentSubscription,
-                userType: userData.userType,
+                userType: userData.role,
             };
 
             // Generate JWT with a 7-day expiration
@@ -177,11 +177,11 @@ export class AuthService {
                 token: accessToken,
                 user: {
                     id: userData.id,
-                    username: userData.userName,
-                    email: userData.emailAddress,
-                    nickName: userData.nickName,
+                    username: userData.username,
+                    email: userData.email,
+                    nickName: userData.nickname,
                     plan: userData.currentSubscription,
-                    userType: userData.userType,
+                    userType: userData.role,
                     lastLogin: new Date(),
                 },
             };
@@ -229,12 +229,12 @@ export class AuthService {
             }
 
             // Check if the email in the token matches the user's email
-            if (user.emailAddress !== tokenPayload.email) {
+            if (user.email !== tokenPayload.email) {
                 throw new UnauthorizedException('Email mismatch');
             }
 
             // Check if the username in the token matches the user's username
-            if (user.userName !== tokenPayload.username) {
+            if (user.username !== tokenPayload.username) {
                 throw new UnauthorizedException('Username mismatch');
             }
 
@@ -244,7 +244,7 @@ export class AuthService {
             }
 
             // Check if the userType in the token matches the user's userType
-            if (user.userType !== tokenPayload.userType) {
+            if (user.role !== tokenPayload.userType) {
                 throw new UnauthorizedException('User type mismatch');
             }
 
@@ -259,11 +259,11 @@ export class AuthService {
                 statusCode: 200,
                 user: {
                     id: user.id,
-                    username: user.userName,
-                    email: user.emailAddress,
-                    nickName: user.nickName,
+                    username: user.username,
+                    email: user.email,
+                    nickName: user.nickname,
                     plan: user.currentSubscription,
-                    userType: user.userType,
+                    userType: user.role,
                     lastLogin: user.lastLogin,
                     isEmailVerified: user?.emailVerification?.isEmailVerified,
                     isActive: user.isActive

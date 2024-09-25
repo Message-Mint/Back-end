@@ -15,16 +15,16 @@ export class UserRepository implements UserProtocol {
 
     // Find user by email
     async findUserByEmail(email: string): Promise<UserEntity | null> {
-        return await this.prisma.user.findUnique({ where: { emailAddress: email } });
+        return await this.prisma.user.findUnique({ where: { email } });
     }
 
-    async findUserByUserName(userName: string): Promise<UserEntity | null> {
-        return await this.prisma.user.findUnique({ where: { userName } })
+    async findUserByUserName(username: string): Promise<UserEntity | null> {
+        return await this.prisma.user.findUnique({ where: { username } })
     }
 
     // Find user by phone number
     async findUserByPhoneNumber(phoneNumber: string): Promise<UserEntity | null> {
-        return await this.prisma.user.findUnique({ where: { phoneNumber } });
+        return await this.prisma.user.findUnique({ where: { phone: phoneNumber } });
     }
 
     async createUser(data: Prisma.UserCreateInput): Promise<UserEntity> {

@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './Modules/Helpers/customExceptions/customexceptions-service';
-import { LoggerService } from './Modules/Helpers/Logger/logger-service';
+import { GlobalExceptionFilter } from './Helpers/customExceptions/customexceptions-service';
+import { LoggerService } from './Helpers/Logger/logger-service';
 import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
