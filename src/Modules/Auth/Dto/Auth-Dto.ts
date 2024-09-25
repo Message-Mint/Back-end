@@ -1,5 +1,5 @@
 import { IsString, IsEmail, IsNumber } from "class-validator";
-
+import { SubscriptionTier, UserRole } from '@prisma/client';
 export class UserRegistrationDto {
     @IsString()
     userName: string;
@@ -50,6 +50,11 @@ export interface JwtPayload {
     userId: string;
     username: string;
     email: string;
-    plan: string;
-    userType: string;
+    role: UserRole;
+    subscription: SubscriptionTier;
+    firstName: string;
+    lastName: string;
+    isActive: boolean;
+    subscriptionStartDate: Date;
+    subscriptionEndDate: Date | null;
 }

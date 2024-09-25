@@ -105,6 +105,7 @@
     }
     ```
 
+
 ## 🛠️ **Error Handling**
 
 - **400 Bad Request:** Indicates that the request is malformed or missing required fields.
@@ -120,8 +121,7 @@ You can test these endpoints using tools like Postman or Insomnia. Ensure that y
 - Always ensure the `phoneNumber` follows international standards.
 - The `JWT_SECRET` and other sensitive environment variables should be stored securely and not exposed in public repositories.
 
-
-3. Verify Token
+## Verify Token
 Endpoint: POST /user/verify-token
 Description: Verifies the JWT token and returns user information if valid. This endpoint is used to check the authenticity of a user's session and retrieve up-to-date user data. Authentication: Requires a valid JWT token in the 'jwt' cookie. Request: No request body required. The JWT token should be sent in the 'jwt' cookie. Responses:
 
@@ -183,3 +183,199 @@ curl -X POST http://your-api-domain.com/user/verify-token \
     If the user's subscription has expired, it will be automatically updated to the "TRIAL" tier.
     Ensure that your server is configured to use secure cookies in production environments.
     The JWT token should be kept secure and not exposed to client-side JavaScript.
+
+
+# Instance Management API
+
+This API provides endpoints for managing WhatsApp instances. All endpoints require authentication using a JWT token.
+
+## Endpoints
+
+### Create Instance
+
+Creates a new WhatsApp instance for the authenticated user.
+
+- **URL**: `/instance/create`
+- **Method**: `POST`
+- **Auth**: Required
+
+#### Request Body
+
+```json
+{
+  "name": "My WhatsApp Instance",
+  "businessName": "My Business",
+  "businessWhatsAppNo": "+1234567890",
+  "businessCountry": "US",
+  "environment": "PRODUCTION",
+  "sessionStorage": "REDIS"
+}
+```
+
+#### Response
+
+```json
+{
+  "id": "123456789",
+  "name": "My WhatsApp Instance",
+  "businessName": "My Business",
+  "businessWhatsAppNo": "+1234567890",
+  "businessCountry": "US",
+  "isActive": true,
+  "environment": "PRODUCTION",
+  "sessionStorage": "REDIS",
+  "createdAt": "2024-09-25T12:00:00Z",
+  "userId": "user123"
+}
+```
+
+### Update Instance
+
+Updates an existing WhatsApp instance.
+
+- **URL**: `/instance/:id`
+- **Method**: `PUT`
+- **Auth**: Required
+
+#### Request Body
+
+```json
+{
+  "name": "Updated Instance Name",
+  "businessName": "Updated Business Name",
+  "isActive": false
+}
+```
+
+#### Response
+
+```json
+{
+  "id": "123456789",
+  "name": "Updated Instance Name",
+  "businessName": "Updated Business Name",
+  "businessWhatsAppNo": "+1234567890",
+  "businessCountry": "US",
+  "isActive": false,
+  "environment": "PRODUCTION",
+  "sessionStorage": "REDIS",
+  "createdAt": "2024-09-25T12:00:00Z",
+  "userId": "user123"
+}
+```
+
+### Delete Instance
+
+Deletes a WhatsApp instance.
+
+- **URL**: `/instance/:id`
+- **Method**: `DELETE`
+- **Auth**: Required
+
+#### Response
+
+```json
+{
+  "message": "Instance deleted successfully"
+}
+```
+
+### Get Instance by ID
+
+Retrieves a specific WhatsApp instance by its ID.
+
+- **URL**: `/instance/:id`
+- **Method**: `GET`
+- **Auth**: Required
+
+#### Response
+
+```json
+{
+  "id": "123456789",
+  "name": "My WhatsApp Instance",
+  "businessName": "My Business",
+  "businessWhatsAppNo": "+1234567890",
+  "businessCountry": "US",
+  "isActive": true,
+  "environment": "PRODUCTION",
+  "sessionStorage": "REDIS",
+  "createdAt": "2024-09-25T12:00:00Z",
+  "userId": "user123"
+}
+```
+
+### Get All Instances
+
+Retrieves all WhatsApp instances for the authenticated user.
+
+- **URL**: `/instance`
+- **Method**: `GET`
+- **Auth**: Required
+
+#### Response
+
+```json
+[
+  {
+    "id": "123456789",
+    "name": "Instance 1",
+    "isActive": true,
+    "environment": "PRODUCTION"
+  },
+  {
+    "id": "987654321",
+    "name": "Instance 2",
+    "isActive": false,
+    "environment": "DEVELOPMENT"
+  }
+]
+```
+
+### Toggle Instance Active Status
+
+Toggles the active status of a WhatsApp instance.
+
+- **URL**: `/instance/:id/toggle-active`
+- **Method**: `PUT`
+- **Auth**: Required
+
+#### Response
+
+```json
+{
+  "id": "123456789",
+  "name": "My WhatsApp Instance",
+  "isActive": false,
+  "environment": "PRODUCTION",
+  "sessionStorage": "REDIS"
+}
+```
+
+## Error Responses
+
+All endpoints may return the following error responses:
+
+- `400 Bad Request`: When the request body is invalid or missing required fields.
+- `401 Unauthorized`: When the user is not authenticated or the token is invalid.
+- `403 Forbidden`: When the user doesn't have permission to perform the action.
+- `404 Not Found`: When the requested instance doesn't exist.
+- `500 Internal Server Error`: When an unexpected error occurs on the server.
+
+Example error response:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Invalid input",
+  "error": "Bad Request"
+}
+```
+
+## Notes
+
+- All requests must include a valid JWT token in the Authorization header.
+- The `id` parameter in URL paths should be a valid bigint value.
+- The `environment` field must be either "DEVELOPMENT" or "PRODUCTION".
+- The `sessionStorage` field must be one of "REDIS", "POSTGRESQL", or "MONGODB".
+

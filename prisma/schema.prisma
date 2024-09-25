@@ -78,14 +78,15 @@ model UserVerification {
 }
 
 model Instance {
-  id               BigInt              @id @default(autoincrement())
-  name             String              @unique
-  businessName     String?
-  businessWhatsApp String?
-  businessCountry  String?
-  isActive         Boolean
-  environment      InstanceEnvironment
-  sessionStorage   SessionStorageType
+  id                 BigInt              @id @default(autoincrement())
+  name               String              @unique
+  businessName       String?
+  businessWhatsAppNo String?
+  businessCountry    String?
+  isActive           Boolean
+  environment        InstanceEnvironment
+  sessionStorage     SessionStorageType
+  createdAt          DateTime            @default(now())
 
   user   User   @relation(fields: [userId], references: [id])
   userId String
