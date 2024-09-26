@@ -141,7 +141,11 @@ export class SocketService implements OnModuleInit {
             }
         });
 
-        socket.ev.on('creds.update', saveCreds);
+        socket.ev.on('creds.update', () => {
+            saveCreds().catch(error =>
+                this.logger.error(`Failed to save credentials for user ${userId}` + error)
+            );
+        });
 
         socket.ev.on('groups.upsert', (groupMetadata) => {
             groupMetadata.forEach(metadata => this.groupMetadataCache.set(metadata.id, metadata));
