@@ -513,3 +513,85 @@ All endpoints may return the following error responses:
 - All requests must include a valid JWT token in the Authorization header.
 - File uploads are limited to a maximum size (configurable on the server).
 - User can only access and manage their own files.
+
+# WhatsApp API
+
+This API provides endpoints for managing WhatsApp instances and handling QR code authentication. All endpoints are protected by JWT authentication.
+
+## Endpoints
+
+### Get QR Code Stream
+
+Streams the QR code for WhatsApp authentication.
+
+- **URL**: `/whatsapp/qr/:userId`
+- **Method**: `GET`
+- **Auth**: Required
+- **Response Type**: Server-Sent Events (SSE)
+
+#### Response
+
+The endpoint streams QR code data as Server-Sent Events. Each event contains:
+
+```json
+{
+  "data": "QR code data or 'Connected!' message"
+}
+```
+
+The stream completes when the "Connected!" message is received.
+
+#### Error Response
+
+If an error occurs, the stream will emit an error event and complete:
+
+```json
+{
+  "error": "Error message"
+}
+```
+
+### Logout Instance
+
+Logs out a WhatsApp instance.
+
+- **URL**: `/whatsapp/logout/:instanceId`
+- **Method**: `POST`
+- **Auth**: Required
+
+#### Response (200 OK)
+
+```json
+{
+  "message": "Instance logged out successfully"
+}
+```
+
+### Close Instance
+
+Closes a WhatsApp instance.
+
+- **URL**: `/whatsapp/close/:instanceId`
+- **Method**: `POST`
+- **Auth**: Required
+
+#### Response (200 OK)
+
+```json
+{
+  "message": "Instance Closed successfully"
+}
+```
+
+## Error Handling
+
+All endpoints may return the following error responses:
+
+- `401 Unauthorized`: When the JWT token is invalid or missing.
+- `404 Not Found`: When the specified instance is not found.
+- `500 Internal Server Error`: When an unexpected error occurs on the server.
+
+## Notes
+
+- All requests must include a valid JWT token in the Authorization header.
+- The QR code stream endpoint uses Server-Sent Events (SSE) for real-time updates.
