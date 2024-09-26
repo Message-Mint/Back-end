@@ -22,6 +22,7 @@ import pino from 'pino';
 import { PostgreSQLService } from "src/Common/Database-Management/PostgreSQL/postgresql-service";
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as qrcode from 'qrcode';
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
 
 @Injectable()
 export class SocketService implements OnModuleInit {
@@ -117,6 +118,27 @@ export class SocketService implements OnModuleInit {
             cachedGroupMetadata: async (jid) => {
                 return this.groupMetadataCache.get(jid);
             },
+            patchMessageBeforeSending: (message) => {
+                const requiresPatch = !!(
+                    message.buttonsMessage ||
+                    message.templateMessage ||
+                    message.listMessage
+                );
+                if (requiresPatch) {
+                    message = {
+                        viewOnceMessage: {
+                            message: {
+                                messageContextInfo: {
+                                    deviceListMetadataVersion: 2,
+                                    deviceListMetadata: {},
+                                },
+                                ...message,
+                            },
+                        },
+                    };
+                }
+                return message;
+            },
         });
 
         this.setupSocketListeners(socket, instanceId, saveCreds, sessionStorage);
@@ -192,6 +214,32 @@ export class SocketService implements OnModuleInit {
                 }
             });
         });
+    }
+
+    async generatePairingCode(instanceId: string, phoneNumber: string): Promise<string> {
+        // Validate phone number
+        if (!isValidPhoneNumber(phoneNumber)) {
+            throw new Error('Invalid phone number');
+        }
+
+        // Parse and format the phone number
+        const parsedNumber = parsePhoneNumber(phoneNumber);
+        const formattedNumber = parsedNumber.format('E.164');
+
+        const socket = await this.getOrCreateSocket(instanceId);
+        if (!socket) {
+            throw new Error('Failed to create or retrieve socket');
+        }
+
+        try {
+            await delay(1200);
+            const pairingCode = await socket.requestPairingCode(formattedNumber);
+            return pairingCode;
+        } catch (error) {
+            await this.deleteSession(instanceId);
+            this.logger.error(`Failed to generate pairing code for instance ${instanceId}`, error);
+            throw new Error('Failed to generate pairing code');
+        }
     }
 
     private async generateQRBase64(qr: string): Promise<string> {

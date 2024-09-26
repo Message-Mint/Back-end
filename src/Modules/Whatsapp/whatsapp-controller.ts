@@ -1,4 +1,4 @@
-import { Controller, Sse, Param, NotFoundException, UseGuards, Post } from "@nestjs/common";
+import { Controller, Sse, Param, NotFoundException, UseGuards, Post, Body, HttpStatus, HttpException } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { Observable, throwError } from "rxjs";
 import { SocketService } from "./services/socket-service";
@@ -36,6 +36,16 @@ export class WhatsappController {
                     observer.complete();
                 });
         });
+    }
+
+    @Post(':instanceId/pairing-code')
+    async generatePairingCode(@Param('instanceId') instanceId: string, @Body("whatsappNumber") whatsappNumber: string) {
+        try {
+            const pairingCode = await this.socket.generatePairingCode(instanceId, whatsappNumber);
+            return { pairingCode };
+        } catch (error) {
+            throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @Post('logout/:instanceId')

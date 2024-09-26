@@ -514,9 +514,9 @@ All endpoints may return the following error responses:
 - File uploads are limited to a maximum size (configurable on the server).
 - User can only access and manage their own files.
 
-# WhatsApp API
+## WhatsApp API
 
-This API provides endpoints for managing WhatsApp instances and handling QR code authentication. All endpoints are protected by JWT authentication.
+This API provides endpoints for managing WhatsApp instances, handling QR code authentication, and generating pairing codes. All endpoints are protected by JWT authentication.
 
 ## Endpoints
 
@@ -548,6 +548,39 @@ If an error occurs, the stream will emit an error event and complete:
 ```json
 {
   "error": "Error message"
+}
+```
+
+### Generate Pairing Code
+
+Generates a pairing code for a WhatsApp instance.
+
+- **URL**: `/whatsapp/:instanceId/pairing-code`
+- **Method**: `POST`
+- **Auth**: Required
+
+#### Request Body
+
+```json
+{
+  "whatsappNumber": "string"
+}
+```
+
+#### Response (200 OK)
+
+```json
+{
+  "pairingCode": "string"
+}
+```
+
+#### Error Response (500 Internal Server Error)
+
+```json
+{
+  "statusCode": 500,
+  "message": "Error message"
 }
 ```
 
@@ -595,3 +628,4 @@ All endpoints may return the following error responses:
 
 - All requests must include a valid JWT token in the Authorization header.
 - The QR code stream endpoint uses Server-Sent Events (SSE) for real-time updates.
+- The pairing code generation endpoint requires a valid WhatsApp number in the request body.
