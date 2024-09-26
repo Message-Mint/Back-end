@@ -35,4 +35,11 @@ export class InstanceRepository implements InstanceProtocol {
     async deleteInstanceById(id: bigint): Promise<InstanceEntity> {
         return await this.prisma.instance.delete({ where: { id } });
     }
+
+    async findActiveInstances(): Promise<{ id: bigint; userId: string; sessionStorage: string }[]> {
+        return await this.prisma.instance.findMany({
+            where: { isActive: true },
+            select: { id: true, userId: true, sessionStorage: true }
+        });
+    }
 }

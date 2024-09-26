@@ -1,5 +1,4 @@
 // Prisma Schema File
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -35,25 +34,24 @@ enum SessionStorageType {
 }
 
 model User {
-  id                    String           @id @default(uuid())
-  username              String           @unique
-  email                 String           @unique
-  phone                 String           @unique
+  id                    String            @id @default(uuid())
+  username              String            @unique
+  email                 String            @unique
+  phone                 String            @unique
   password              String
   firstName             String
   lastName              String
   nickname              String?
-  isActive              Boolean          @default(true)
-  currentSubscription   SubscriptionTier @default(TRIAL)
-  registeredAt          DateTime         @default(now())
+  isActive              Boolean           @default(true)
+  currentSubscription   SubscriptionTier  @default(TRIAL)
+  registeredAt          DateTime          @default(now())
   lastLogin             DateTime?
-  subscriptionStartDate DateTime         @default(now())
+  subscriptionStartDate DateTime          @default(now())
   subscriptionEndDate   DateTime?
-  role                  UserRole         @default(CUSTOMER)
-
-  emailVerification UserVerification? @relation("EmailVerification")
-  phoneVerification UserVerification? @relation("PhoneVerification")
-  instances         Instance[]
+  role                  UserRole          @default(CUSTOMER)
+  emailVerification     UserVerification? @relation("EmailVerification")
+  phoneVerification     UserVerification? @relation("PhoneVerification")
+  instances             Instance[]
 
   @@index([username, email, phone])
   @@index([currentSubscription, subscriptionStartDate])
@@ -67,11 +65,10 @@ model UserVerification {
   isPhoneVerified Boolean  @default(false)
   createdAt       DateTime @default(now())
   expiresAt       DateTime @default(dbgenerated("NOW() + INTERVAL '24 hours'"))
-
-  userEmail   User?   @relation("EmailVerification", fields: [userEmailId], references: [id], onDelete: Cascade)
-  userEmailId String? @unique
-  userPhone   User?   @relation("PhoneVerification", fields: [userPhoneId], references: [id], onDelete: Cascade)
-  userPhoneId String? @unique
+  userEmail       User?    @relation("EmailVerification", fields: [userEmailId], references: [id], onDelete: Cascade)
+  userEmailId     String?  @unique
+  userPhone       User?    @relation("PhoneVerification", fields: [userPhoneId], references: [id], onDelete: Cascade)
+  userPhoneId     String?  @unique
 
   @@index([code])
   @@map("user_verifications")
@@ -83,13 +80,12 @@ model Instance {
   businessName       String?
   businessWhatsAppNo String?
   businessCountry    String?
-  isActive           Boolean
+  isActive           Boolean             @default(true)
   environment        InstanceEnvironment
   sessionStorage     SessionStorageType
   createdAt          DateTime            @default(now())
-
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String
 
   @@index([name, isActive])
   @@map("instances")

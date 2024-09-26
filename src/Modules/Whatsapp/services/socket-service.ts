@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import makeWASocket, {
     AuthenticationState,
@@ -12,7 +12,6 @@ import makeWASocket, {
 import { useRedisAuthState } from 'redis-baileys';
 import { usePostgreSQLAuthState } from "postgres-baileys";
 import { useMongoDBAuthState } from "mongo-baileys";
-import { InstanceEntity } from "src/Common/Entities/instance-entities";
 import { MongoDBService } from "src/Common/Database-Management/MongoDB/mongoDB-service";
 import { AuthDocument } from "../types/wasocket-types";
 import { LoggerService } from "src/Helpers/Logger/logger-service";
@@ -25,7 +24,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as qrcode from 'qrcode';
 
 @Injectable()
-export class SocketService {
+export class SocketService implements OnModuleInit {
     private msgRetryCounterCache = new NodeCache();
     private socketMap: Map<string, WASocket> = new Map();
     private groupMetadataCache: NodeCache;
@@ -41,7 +40,34 @@ export class SocketService {
         this.groupMetadataCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
     }
 
-    async makeSocket(userId: string): Promise<WASocket> {
+    async onModuleInit() {
+        await this.initializeActiveSockets();
+    }
+
+    private async initializeActiveSockets(): Promise<void> {
+        try {
+            const activeInstances = await this.instanceDB.findActiveInstances();
+
+            this.logger.log(`Found ${activeInstances.length} active instances. Initializing sockets...`);
+
+            for (const instance of activeInstances) {
+                try {
+                    await this.makeSocket(instance.userId, instance.sessionStorage);
+                    this.logger.log(`Initialized socket for instance ${instance.id}`);
+                } catch (error) {
+                    this.logger.error(`Failed to initialize socket for instance ${instance.id}`, error);
+                }
+                // Add a small delay between initializations to prevent overwhelming the system
+                await delay(1000);
+            }
+
+            this.logger.log('Finished initializing all active sockets');
+        } catch (error) {
+            this.logger.error('Failed to initialize active sockets', error);
+        }
+    }
+
+    async makeSocket(userId: string, sessionStorage: string): Promise<WASocket> {
         const existingSocket = this.socketMap.get(userId);
         if (existingSocket?.ws.readyState === existingSocket.ws.OPEN) {
             this.logger.log(`Socket already exists and is open for user ${userId}`);
@@ -50,17 +76,11 @@ export class SocketService {
 
         this.socketMap.delete(userId);
 
-        const users = await this.instanceDB.findInstancesByUserId(userId);
-        if (!users?.length) {
-            throw new Error(`User Not Found for ID: ${userId}`);
-        }
-
-        const { state, saveCreds } = await this.getUserSessionStorage(users[0]);
+        const { state, saveCreds } = await this.getUserSessionStorage({ id: userId, sessionStorage });
 
         const socket: WASocket = makeWASocket({
             logger: pino({ level: 'silent' }),
             printQRInTerminal: false,
-            qrTimeout: 12000,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
@@ -75,15 +95,17 @@ export class SocketService {
             shouldSyncHistoryMessage: () => false,
             userDevicesCache: new NodeCache({ stdTTL: 86400, checkperiod: 3600 }),
             transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 1000 },
+            cachedGroupMetadata: async (jid) => {
+                return this.groupMetadataCache.get(jid);
+            },
         });
 
-        this.setupSocketListeners(socket, userId, saveCreds);
+        this.setupSocketListeners(socket, userId, saveCreds, sessionStorage);
         this.socketMap.set(userId, socket);
-
         return socket;
     }
 
-    private setupSocketListeners(socket: WASocket, userId: string, saveCreds: () => Promise<void>) {
+    private setupSocketListeners(socket: WASocket, userId: string, saveCreds: () => Promise<void>, sessionStorage: string) {
         socket.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
@@ -113,9 +135,9 @@ export class SocketService {
             }
 
             if (statusCode === DisconnectReason.restartRequired) {
-                await this.immediateReconnect(userId);
+                await this.immediateReconnect(userId, sessionStorage);
             } else {
-                await this.reconnectWithBackoff(userId);
+                await this.reconnectWithBackoff(userId, sessionStorage);
             }
         });
 
@@ -154,12 +176,12 @@ export class SocketService {
         return ![DisconnectReason.loggedOut, DisconnectReason.timedOut, DisconnectReason.badSession].includes(statusCode);
     }
 
-    private async immediateReconnect(userId: string): Promise<void> {
+    private async immediateReconnect(userId: string, sessionStorage: string): Promise<void> {
         this.logger.log(`Immediate reconnect for user ${userId}`);
-        await this.makeSocket(userId);
+        await this.makeSocket(userId, sessionStorage);
     }
 
-    private async reconnectWithBackoff(userId: string): Promise<void> {
+    private async reconnectWithBackoff(userId: string, sessionStorage: string): Promise<void> {
         const attemptCount = this.msgRetryCounterCache.get('reconnectAttempts') as number || 0;
         const delay = this.calculateBackoffDelay(attemptCount);
 
@@ -168,7 +190,7 @@ export class SocketService {
         this.msgRetryCounterCache.set('reconnectAttempts', attemptCount + 1);
 
         await new Promise(resolve => setTimeout(resolve, delay));
-        await this.makeSocket(userId);
+        await this.makeSocket(userId, sessionStorage);
     }
 
     private calculateBackoffDelay(attemptCount: number): number {
@@ -192,7 +214,7 @@ export class SocketService {
         }
     }
 
-    private async getUserSessionStorage(instance: InstanceEntity): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
+    private async getUserSessionStorage(instance: { id: string, sessionStorage: string }): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
         const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${instance.id}`;
 
         const storageHandlers = {
