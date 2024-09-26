@@ -1,4 +1,4 @@
-import { Controller, Sse, Param, NotFoundException, UseGuards } from "@nestjs/common";
+import { Controller, Sse, Param, NotFoundException, UseGuards, Post } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { Observable, throwError } from "rxjs";
 import { SocketService } from "./services/socket-service";
@@ -36,5 +36,17 @@ export class WhatsappController {
                     observer.complete();
                 });
         });
+    }
+
+    @Post('logout/:instanceId')
+    async logoutInstance(@Param('instanceId') instanceId: string): Promise<{ message: string }> {
+        await this.socket.loggedOutEndSocket(instanceId);
+        return { message: 'Instance logged out successfully' };
+    }
+
+    @Post('close/:instanceId')
+    async closeInstance(@Param('instanceId') instanceId: string): Promise<{ message: string }> {
+        await this.socket.stopSocket(instanceId);
+        return { message: 'Instance Closed successfully' };
     }
 }

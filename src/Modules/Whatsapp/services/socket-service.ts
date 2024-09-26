@@ -155,6 +155,10 @@ export class SocketService implements OnModuleInit {
 
             this.logger.log(`Connection closed due to ${lastDisconnect?.error}, reconnecting: ${shouldReconnect}`);
 
+            if ((lastDisconnect?.error as Boom)?.message.toLowerCase() === 'user choice!') {
+                return;
+            }
+
             if (!shouldReconnect) {
                 this.eventEmitter.removeAllListeners(`qr.update.${instanceId}`);
                 this.logger.log(`Stopping reconnection attempts for instance ${instanceId}`);
@@ -290,6 +294,44 @@ export class SocketService implements OnModuleInit {
 
         return { host, port, password };
     }
+
+    async stopSocket(instanceId: string) {
+        const existingSocket = this.socketMap.get(instanceId);
+        if (existingSocket && existingSocket?.ws.readyState === existingSocket?.ws.OPEN) {
+            existingSocket.end(new Error("user choice!"))
+            await this.instanceDB.updateInstanceById(instanceId, { isActive: false });
+        }
+    }
+
+    async loggedOutEndSocket(instanceId: string): Promise<void> {
+        try {
+            // Get the existing socket
+            const existingSocket = this.socketMap.get(instanceId);
+
+            if (existingSocket && existingSocket?.ws.readyState === existingSocket?.ws.OPEN) {
+                // Close the existing socket
+                await existingSocket.logout("User Logged Out!");
+                existingSocket.end(new Error('User logged out!'));
+                this.socketMap.delete(instanceId);
+                this.logger.log(`Socket closed for logged out instance ${instanceId}`);
+            }
+
+            // Update instance status in the database
+            await this.instanceDB.updateInstanceById(instanceId, { isActive: false });
+
+            // Delete the session
+            await this.deleteSession(instanceId);
+
+            // Remove any existing QR code listeners
+            this.eventEmitter.removeAllListeners(`qr.update.${instanceId}`);
+
+            this.logger.log(`Logged out end socket process completed for instance ${instanceId}`);
+        } catch (error) {
+            this.logger.error(`Error in loggedOutEndSocket for instance ${instanceId}`, error);
+            throw error;
+        }
+    }
+
 
     private async getPostgresAuthState(sessionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
         return await usePostgreSQLAuthState(this.pgPool, sessionName);
