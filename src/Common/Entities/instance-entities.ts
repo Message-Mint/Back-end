@@ -1,7 +1,7 @@
 import { InstanceEnvironment, SessionStorageType } from '@prisma/client';
 
 export interface InstanceEntity {
-    id: bigint;
+    id: string;
     name: string;
     businessName?: string | null;
     businessWhatsAppNo?: string | null;

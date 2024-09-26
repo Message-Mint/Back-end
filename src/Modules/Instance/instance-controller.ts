@@ -11,27 +11,31 @@ export class InstanceController {
 
     @Post('create')
     async createInstance(@Body() createInstanceDto: CreateInstanceDto, @Req() req: Request) {
-        const userId = (req as AuthenticatedRequest).user.userId;
-        return this.instanceService.createInstance(createInstanceDto, userId);
+        try {
+            const userId = (req as AuthenticatedRequest).user.userId;
+            return this.instanceService.createInstance(createInstanceDto, userId);
+        } catch (err) {
+            return err.message;
+        }
     }
 
     @Put(':id')
     async updateInstance(@Param('id') id: string, @Body() updateInstanceDto: UpdateInstanceDto, @Req() req: Request) {
         const userId = (req as AuthenticatedRequest).user.userId;
-        return this.instanceService.updateInstance(BigInt(id), updateInstanceDto, userId);
+        return this.instanceService.updateInstance(id, updateInstanceDto, userId);
     }
 
     @Delete(':id')
     async deleteInstance(@Param('id') id: string, @Req() req: Request) {
         const userId = (req as AuthenticatedRequest).user.userId;
-        await this.instanceService.deleteInstance(BigInt(id), userId);
+        await this.instanceService.deleteInstance(id, userId);
         return { message: 'Instance deleted successfully' };
     }
 
     @Get(':id')
     async getInstanceById(@Param('id') id: string, @Req() req: Request) {
         const userId = (req as AuthenticatedRequest).user.userId;
-        return this.instanceService.getInstanceById(BigInt(id), userId);
+        return this.instanceService.getInstanceById(id, userId);
     }
 
     @Get()
@@ -43,6 +47,6 @@ export class InstanceController {
     @Put(':id/toggle-active')
     async toggleInstanceActive(@Param('id') id: string, @Req() req: Request) {
         const userId = (req as AuthenticatedRequest).user.userId;
-        return this.instanceService.toggleInstanceActive(BigInt(id), userId);
+        return this.instanceService.toggleInstanceActive(id, userId);
     }
 }

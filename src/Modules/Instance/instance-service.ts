@@ -3,7 +3,6 @@ import { CreateInstanceDto, UpdateInstanceDto } from "./Dto/Instance-dto";
 import { Prisma } from "@prisma/client";
 import { InstanceRepository } from "src/Common/Repositorys/instance-repository";
 import { InstanceEntity } from "src/Common/Entities/instance-entities";
-
 @Injectable()
 export class InstanceService {
     constructor(
@@ -12,6 +11,8 @@ export class InstanceService {
 
     async createInstance(createInstanceDto: CreateInstanceDto, userId: string): Promise<InstanceEntity> {
         try {
+            this.validateCreateInstanceDto(createInstanceDto);
+
             const existingInstance = await this.instanceRepo.findInstanceByName(createInstanceDto.name);
             if (existingInstance) {
                 throw new ConflictException(`Instance with name '${createInstanceDto.name}' already exists`);
@@ -37,12 +38,47 @@ export class InstanceService {
                     throw new ConflictException('Instance name already exists');
                 }
             }
-            console.error('Error creating instance:', error);
-            throw new InternalServerErrorException('An error occurred while creating the instance');
+
+            throw new InternalServerErrorException(error?.response || error);
         }
     }
 
-    async updateInstance(id: bigint, updateInstanceDto: UpdateInstanceDto, userId: string): Promise<InstanceEntity> {
+    private validateCreateInstanceDto(dto: CreateInstanceDto): void {
+        const errors: string[] = [];
+
+        if (!dto.name || typeof dto.name !== 'string' || dto.name.trim() === '') {
+            errors.push('Instance name is required and must be a non-empty string');
+        }
+
+        if (!dto.businessName || typeof dto.businessName !== 'string' || dto.businessName.trim() === '') {
+            errors.push('Business name is required and must be a non-empty string');
+        }
+
+        if (!dto.businessWhatsAppNo || typeof dto.businessWhatsAppNo !== 'string' || !/^\+?[1-9]\d{1,14}$/.test(dto.businessWhatsAppNo)) {
+            errors.push('Business WhatsApp number is required and must be a valid phone number');
+        }
+
+        if (!dto.businessCountry || typeof dto.businessCountry !== 'string' || dto.businessCountry.trim() === '') {
+            errors.push('Business country is required and must be a non-empty string');
+        }
+
+        if (!dto.environment || typeof dto.environment !== 'string' || !['production', 'development'].includes(dto.environment.toLowerCase())) {
+            errors.push('Environment is required and must be either "PRODUCTION", "DEVELOPMENT"');
+        }
+
+        if (!dto.sessionStorage || typeof dto.sessionStorage !== 'string' || !['redis', 'mongodb', 'postgreql'].includes(dto.sessionStorage.toLowerCase())) {
+            errors.push('Session storage is required and must be either "REDIS", "POSTGRESQL" or "MONGODB"');
+        }
+
+        if (errors.length > 0) {
+            throw new BadRequestException({
+                message: 'Invalid instance data',
+                errors: errors
+            });
+        }
+    }
+
+    async updateInstance(id: string, updateInstanceDto: UpdateInstanceDto, userId: string): Promise<InstanceEntity> {
         try {
             const existingInstance = await this.instanceRepo.findInstanceById(id);
             if (!existingInstance) {
@@ -64,7 +100,7 @@ export class InstanceService {
         }
     }
 
-    async deleteInstance(id: bigint, userId: string): Promise<void> {
+    async deleteInstance(id: string, userId: string): Promise<void> {
         try {
             const existingInstance = await this.instanceRepo.findInstanceById(id);
             if (!existingInstance) {
@@ -85,7 +121,7 @@ export class InstanceService {
         }
     }
 
-    async getInstanceById(id: bigint, userId: string): Promise<InstanceEntity> {
+    async getInstanceById(id: string, userId: string): Promise<InstanceEntity> {
         const instance = await this.instanceRepo.findInstanceById(id);
         if (!instance) {
             throw new NotFoundException(`Instance with id '${id}' not found`);
@@ -102,7 +138,7 @@ export class InstanceService {
         return await this.instanceRepo.findInstancesByUserId(userId);
     }
 
-    async toggleInstanceActive(id: bigint, userId: string): Promise<InstanceEntity> {
+    async toggleInstanceActive(id: string, userId: string): Promise<InstanceEntity> {
         const instance = await this.getInstanceById(id, userId);
         const updatedInstance = await this.instanceRepo.updateInstanceById(id, { isActive: !instance.isActive });
         return updatedInstance;

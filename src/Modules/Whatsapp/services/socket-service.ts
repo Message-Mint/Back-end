@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable, NotFoundException, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import makeWASocket, {
     AuthenticationState,
@@ -52,12 +52,11 @@ export class SocketService implements OnModuleInit {
 
             for (const instance of activeInstances) {
                 try {
-                    await this.makeSocket(instance.userId, instance.sessionStorage);
+                    await this.makeSocket(instance.id.toString(), instance.sessionStorage);
                     this.logger.log(`Initialized socket for instance ${instance.id}`);
                 } catch (error) {
                     this.logger.error(`Failed to initialize socket for instance ${instance.id}`, error);
                 }
-                // Add a small delay between initializations to prevent overwhelming the system
                 await delay(1000);
             }
 
@@ -67,16 +66,36 @@ export class SocketService implements OnModuleInit {
         }
     }
 
-    async makeSocket(userId: string, sessionStorage: string): Promise<WASocket> {
-        const existingSocket = this.socketMap.get(userId);
-        if (existingSocket?.ws.readyState === existingSocket.ws.OPEN) {
-            this.logger.log(`Socket already exists and is open for user ${userId}`);
+    async getOrCreateSocket(instanceId: string): Promise<WASocket> {
+        if (!instanceId) {
+            throw new NotFoundException("Instance ID is required");
+        }
+
+        const instance = await this.instanceDB.findInstanceById(instanceId);
+        if (!instance) {
+            throw new NotFoundException(`Instance with ID ${instanceId} not found`);
+        }
+
+        try {
+            return await this.makeSocket(instanceId, instance.sessionStorage);
+        } catch (error) {
+            if (error instanceof Boom) {
+                throw new Error(`Failed to create socket: ${error.output?.payload?.message || error.message}`);
+            }
+            throw error;
+        }
+    }
+
+    async makeSocket(instanceId: string, sessionStorage: string): Promise<WASocket> {
+        const existingSocket = this.socketMap.get(instanceId);
+        if (existingSocket && existingSocket?.ws.readyState === existingSocket?.ws.OPEN) {
+            this.logger.log(`Socket already exists and is open for instance ${instanceId}`);
             return existingSocket;
         }
 
-        this.socketMap.delete(userId);
+        this.socketMap.delete(instanceId);
 
-        const { state, saveCreds } = await this.getUserSessionStorage({ id: userId, sessionStorage });
+        const { state, saveCreds } = await this.getInstanceSessionStorage({ id: instanceId, sessionStorage });
 
         const socket: WASocket = makeWASocket({
             logger: pino({ level: 'silent' }),
@@ -100,23 +119,30 @@ export class SocketService implements OnModuleInit {
             },
         });
 
-        this.setupSocketListeners(socket, userId, saveCreds, sessionStorage);
-        this.socketMap.set(userId, socket);
+        this.setupSocketListeners(socket, instanceId, saveCreds, sessionStorage);
+        this.socketMap.set(instanceId, socket);
         return socket;
     }
 
-    private setupSocketListeners(socket: WASocket, userId: string, saveCreds: () => Promise<void>, sessionStorage: string) {
+    private setupSocketListeners(socket: WASocket, instanceId: string, saveCreds: () => Promise<void>, sessionStorage: string) {
         socket.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect, qr, isNewLogin } = update;
 
             if (qr) {
+                this.logger.info(`[QR] Generated for Instance: ${instanceId}`)
                 const qrBase64 = await this.generateQRBase64(qr);
-                this.eventEmitter.emit('qr.update', { userId, qrBase64 });
+                this.eventEmitter.emit(`qr.update.${instanceId}`, { data: qrBase64 });
+            }
+
+            if (isNewLogin) {
+                this.eventEmitter.emit(`qr.update.${instanceId}`, { data: "Connected!" });
+                this.eventEmitter.removeAllListeners(`qr.update.${instanceId}`);
             }
 
             if (connection === 'open') {
-                this.logger.log(`Connection opened for user ${userId}`);
-                this.scheduleSocketRenewal(userId);
+                await this.instanceDB.updateInstanceById(instanceId, { isActive: true })
+                this.logger.log(`Connection opened for instance ${instanceId}`);
+                this.scheduleSocketRenewal(instanceId);
                 return;
             }
 
@@ -125,25 +151,28 @@ export class SocketService implements OnModuleInit {
             const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
             const shouldReconnect = this.shouldReconnect(statusCode);
 
+            await this.instanceDB.updateInstanceById(instanceId, { isActive: false })
+
             this.logger.log(`Connection closed due to ${lastDisconnect?.error}, reconnecting: ${shouldReconnect}`);
 
             if (!shouldReconnect) {
-                this.logger.log(`Stopping reconnection attempts for user ${userId}`);
-                this.socketMap.delete(userId);
-                await this.deleteSession(userId);
+                this.eventEmitter.removeAllListeners(`qr.update.${instanceId}`);
+                this.logger.log(`Stopping reconnection attempts for instance ${instanceId}`);
+                this.socketMap.delete(instanceId);
+                await this.deleteSession(instanceId);
                 return;
             }
 
             if (statusCode === DisconnectReason.restartRequired) {
-                await this.immediateReconnect(userId, sessionStorage);
+                await this.immediateReconnect(instanceId, sessionStorage);
             } else {
-                await this.reconnectWithBackoff(userId, sessionStorage);
+                await this.reconnectWithBackoff(instanceId, sessionStorage);
             }
         });
 
         socket.ev.on('creds.update', () => {
             saveCreds().catch(error =>
-                this.logger.error(`Failed to save credentials for user ${userId}` + error)
+                this.logger.error(`Failed to save credentials for instance ${instanceId}` + error)
             );
         });
 
@@ -218,7 +247,7 @@ export class SocketService implements OnModuleInit {
         }
     }
 
-    private async getUserSessionStorage(instance: { id: string, sessionStorage: string }): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
+    private async getInstanceSessionStorage(instance: { id: string, sessionStorage: string }): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
         const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${instance.id}`;
 
         const storageHandlers = {
@@ -239,9 +268,15 @@ export class SocketService implements OnModuleInit {
         }
     }
 
+
     private async getRedisAuthState(sessionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
-        const { host, port, password } = this.getRedisConfig();
-        return await useRedisAuthState({ host, port, password }, sessionName);
+        try {
+            const { host, port, password } = this.getRedisConfig();
+            //   return await useRedisAuthState({ host, port, password }, sessionName);
+            return
+        } catch (err) {
+            this.logger.error(err?.message || err)
+        }
     }
 
     private getRedisConfig() {
@@ -270,12 +305,11 @@ export class SocketService implements OnModuleInit {
         return await useMongoDBAuthState(client);
     }
 
-    private async deleteSession(userId: string): Promise<void> {
-        const users = await this.instanceDB.findInstancesByUserId(userId);
-        if (!users?.length) return;
+    private async deleteSession(instanceID: string): Promise<void> {
+        const users = await this.instanceDB.findInstanceById(instanceID);
+        if (!users) return;
 
-        const instance = users[0];
-        const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${instance.id}`;
+        const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${users.id}`;
 
         const deletionHandlers = {
             REDIS: () => this.deleteRedisSession(sessionName),
@@ -284,7 +318,7 @@ export class SocketService implements OnModuleInit {
             default: () => this.deleteMultiFileSession(sessionName),
         };
 
-        const handler = deletionHandlers[instance.sessionStorage] || deletionHandlers.default;
+        const handler = deletionHandlers[users.sessionStorage] || deletionHandlers.default;
         await handler();
     }
 
