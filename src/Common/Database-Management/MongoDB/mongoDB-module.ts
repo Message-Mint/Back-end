@@ -1,10 +1,15 @@
-import { Module } from "@nestjs/common";
-import { MongoDBService } from "./mongoDB-service";
-import { LoggerService } from "src/Helpers/Logger/logger-service";
+import { Module, DynamicModule } from '@nestjs/common';
+import { MongoDBService } from './mongoDB-service';
+import { LoggerService } from 'src/Helpers/Logger/logger-service';
 
-@Module({
-    providers: [MongoDBService, LoggerService],
-    exports: [MongoDBService]
-})
-
-export class MongoDBModule { }
+@Module({})
+export class MongoDBModule {
+    static forRoot(): DynamicModule {
+        return {
+            module: MongoDBModule,
+            providers: [MongoDBService, LoggerService],
+            exports: [MongoDBService],
+            global: true
+        };
+    }
+}

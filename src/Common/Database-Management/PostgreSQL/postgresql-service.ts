@@ -1,18 +1,23 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from "@nestjs/common";
+import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { Pool, PoolClient, QueryResult } from "pg";
 import { ConfigService } from "@nestjs/config";
 import { LoggerService } from "src/Helpers/Logger/logger-service";
 
 @Injectable()
-export class PostgreSQLService implements OnModuleInit, OnModuleDestroy {
+export class PostgreSQLService implements OnModuleDestroy {
     private pool: Pool;
+    private initialized: boolean = false;
 
     constructor(
         private configService: ConfigService,
         private readonly logger: LoggerService
-    ) { }
+    ) {
+        this.initialize();
+    }
 
-    async onModuleInit() {
+    private async initialize() {
+        if (this.initialized) return;
+
         this.pool = new Pool({
             host: this.configService.get<string>("POSTGRES_HOST"),
             port: this.configService.get<number>("POSTGRES_PORT"),
@@ -27,22 +32,26 @@ export class PostgreSQLService implements OnModuleInit, OnModuleDestroy {
             connectionTimeoutMillis: 10000
         });
 
-        // Test the connection
         try {
             const client = await this.pool.connect();
             this.logger.log("Successfully connected to PostgreSQL");
             client.release();
+            this.initialized = true;
         } catch (error) {
             this.logger.error("Failed to connect to PostgreSQL", error);
+            throw error;
         }
     }
 
     async onModuleDestroy() {
-        await this.pool.end();
-        this.logger.log("PostgreSQL pool has ended");
+        if (this.pool) {
+            await this.pool.end();
+            this.logger.log("PostgreSQL pool has ended");
+        }
     }
 
     async getClient(): Promise<PoolClient> {
+        await this.initialize();
         return await this.pool.connect();
     }
 

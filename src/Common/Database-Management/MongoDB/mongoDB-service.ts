@@ -7,6 +7,7 @@ import { LoggerService } from "src/Helpers/Logger/logger-service";
 export class MongoDBService implements OnModuleInit, OnModuleDestroy {
     private client: MongoClient;
     private db: Db;
+    private initialized: boolean = false;
 
     constructor(
         private configService: ConfigService,
@@ -38,6 +39,32 @@ export class MongoDBService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
+    async initialize() {
+        if (this.initialized) return;
+
+        const mongoUrl = this.configService.get<string>("MONGO_URL");
+        if (!mongoUrl) {
+            throw new Error("MongoDB URL is not defined in the configuration");
+        }
+
+        this.client = new MongoClient(mongoUrl);
+
+        try {
+            await this.client.connect();
+            this.logger.log("Successfully connected to MongoDB");
+            this.db = this.client.db();
+            this.initialized = true;
+        } catch (error) {
+            this.logger.error("Failed to connect to MongoDB", error);
+            throw error;
+        }
+    }
+
+    async getCollection<T extends Document>(collectionName: string): Promise<Collection<T>> {
+        await this.initialize();
+        return this.db.collection<T>(collectionName);
+    }
+
     getConnectedClient(): MongoClient {
         if (!this.client) {
             throw new Error("MongoDB client is not initialized");
@@ -45,28 +72,24 @@ export class MongoDBService implements OnModuleInit, OnModuleDestroy {
         return this.client;
     }
 
-    getCollection<T extends Document>(collectionName: string): Collection<T> {
-        return this.db.collection<T>(collectionName);
-    }
-
     async insertOne<T extends Document>(collectionName: string, document: Omit<T, '_id'>): Promise<WithId<T>> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         const result = await collection.insertOne(document as any);
         return { ...document, _id: result.insertedId } as WithId<T>;
     }
 
     async findOne<T extends Document>(collectionName: string, filter: Partial<T>): Promise<WithId<T> | null> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         return await collection.findOne(filter as any);
     }
 
     async find<T extends Document>(collectionName: string, filter: Partial<T>, options?: { limit?: number, skip?: number }): Promise<WithId<T>[]> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         return await collection.find(filter as any, options).toArray();
     }
 
     async updateOne<T extends Document>(collectionName: string, filter: Partial<T>, update: Partial<T>): Promise<WithId<T> | null> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         const options: FindOneAndUpdateOptions = { returnDocument: 'after' };
         const result = await collection.findOneAndUpdate(
             filter as any,
@@ -77,23 +100,23 @@ export class MongoDBService implements OnModuleInit, OnModuleDestroy {
     }
 
     async deleteOne<T extends Document>(collectionName: string, filter: Partial<T>): Promise<boolean> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         const result = await collection.deleteOne(filter as any);
         return result.deletedCount > 0;
     }
 
     async count<T extends Document>(collectionName: string, filter: Partial<T>): Promise<number> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         return await collection.countDocuments(filter as any);
     }
 
     async aggregate<T extends Document, R>(collectionName: string, pipeline: object[]): Promise<R[]> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         return await collection.aggregate<R>(pipeline).toArray();
     }
 
     async createIndex<T extends Document>(collectionName: string, fieldOrSpec: IndexSpecification, options?: object): Promise<string> {
-        const collection = this.getCollection<T>(collectionName);
+        const collection = await this.getCollection<T>(collectionName);
         return await collection.createIndex(fieldOrSpec, options);
     }
 

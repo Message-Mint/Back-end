@@ -20,6 +20,9 @@ import { InstanceRepository } from "src/Common/Repositorys/instance-repository";
 import { Boom } from '@hapi/boom';
 import * as NodeCache from 'node-cache';
 import pino from 'pino';
+import { PostgreSQLService } from "src/Common/Database-Management/PostgreSQL/postgresql-service";
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import * as qrcode from 'qrcode';
 
 @Injectable()
 export class SocketService {
@@ -31,189 +34,204 @@ export class SocketService {
         private readonly instanceDB: InstanceRepository,
         private readonly configService: ConfigService,
         private readonly mongoDb: MongoDBService,
-        private readonly logger: LoggerService
+        private readonly logger: LoggerService,
+        private readonly pgPool: PostgreSQLService,
+        private readonly eventEmitter: EventEmitter2
     ) {
         this.groupMetadataCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 });
     }
 
     async makeSocket(userId: string): Promise<WASocket> {
-        try {
-            // Check if a socket already exists for this user
-            if (this.socketMap.has(userId)) {
-                const existingSocket = this.socketMap.get(userId);
-                if (existingSocket.ws.readyState === existingSocket.ws.OPEN) {
-                    this.logger.log(`Socket already exists and is open for user ${userId}`);
-                    return existingSocket;
-                } else {
-                    this.logger.log(`Existing socket for user ${userId} is not open. Creating a new one.`);
-                    this.socketMap.delete(userId);
-                }
-            }
-
-            const users = await this.instanceDB.findInstancesByUserId(userId);
-
-            if (!users || users.length === 0) {
-                throw new Error(`User Not Found for ID: ${userId}`);
-            }
-
-            const { state, saveCreds } = await this.getUserSessionStorage(users[0]);
-
-            const logger = pino({ level: 'silent' });
-
-            const socket: WASocket = makeWASocket({
-                logger,
-                printQRInTerminal: false,
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, logger),
-                },
-                msgRetryCounterCache: this.msgRetryCounterCache,
-                generateHighQualityLinkPreview: true,
-                browser: ['Safari (Mac)', 'Safari', '16.5'],
-                markOnlineOnConnect: false,
-                retryRequestDelayMs: 2000,
-                fireInitQueries: false,
-                syncFullHistory: false,
-                shouldSyncHistoryMessage: () => false,
-                userDevicesCache: new NodeCache({ stdTTL: 86400, checkperiod: 3600 }),
-                transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 1000 },
-            });
-
-            this.setupSocketListeners(socket, userId, saveCreds);
-            this.socketMap.set(userId, socket);
-
-            return socket;
-        } catch (error) {
-            this.logger.error(`Failed to make socket for user ${userId}`, error);
-            throw new Error(`Socket creation failed: ${error.message}`);
+        const existingSocket = this.socketMap.get(userId);
+        if (existingSocket?.ws.readyState === existingSocket.ws.OPEN) {
+            this.logger.log(`Socket already exists and is open for user ${userId}`);
+            return existingSocket;
         }
+
+        this.socketMap.delete(userId);
+
+        const users = await this.instanceDB.findInstancesByUserId(userId);
+        if (!users?.length) {
+            throw new Error(`User Not Found for ID: ${userId}`);
+        }
+
+        const { state, saveCreds } = await this.getUserSessionStorage(users[0]);
+
+        const socket: WASocket = makeWASocket({
+            logger: pino({ level: 'silent' }),
+            printQRInTerminal: false,
+            qrTimeout: 12000,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
+            },
+            msgRetryCounterCache: this.msgRetryCounterCache,
+            generateHighQualityLinkPreview: true,
+            browser: ['Safari (Mac)', 'Safari', '16.5'],
+            markOnlineOnConnect: false,
+            retryRequestDelayMs: 2000,
+            fireInitQueries: false,
+            syncFullHistory: false,
+            shouldSyncHistoryMessage: () => false,
+            userDevicesCache: new NodeCache({ stdTTL: 86400, checkperiod: 3600 }),
+            transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 1000 },
+        });
+
+        this.setupSocketListeners(socket, userId, saveCreds);
+        this.socketMap.set(userId, socket);
+
+        return socket;
     }
 
     private setupSocketListeners(socket: WASocket, userId: string, saveCreds: () => Promise<void>) {
         socket.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-            if (connection === 'close') {
-                const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
-                const shouldReconnect = this.shouldReconnect(statusCode);
+            const { connection, lastDisconnect, qr } = update;
 
-                this.logger.log(`Connection closed due to ${lastDisconnect?.error}, reconnecting: ${shouldReconnect}`);
+            if (qr) {
+                const qrBase64 = await this.generateQRBase64(qr);
+                this.eventEmitter.emit('qr.update', { userId, qrBase64 });
+            }
 
-                if (shouldReconnect) {
-                    await delay(this.getExponentialBackoffDelay(statusCode));
-                    try {
-                        await this.makeSocket(userId);
-                    } catch (error) {
-                        this.logger.error(`Failed to reconnect for user ${userId}`, error);
-                    }
-                } else {
-                    this.logger.log(`Stopping reconnection attempts for user ${userId}`);
-                    this.socketMap.delete(userId);
-                }
-            } else if (connection === 'open') {
+            if (connection === 'open') {
                 this.logger.log(`Connection opened for user ${userId}`);
                 this.scheduleSocketRenewal(userId);
+                return;
+            }
+
+            if (connection !== 'close') return;
+
+            const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+            const shouldReconnect = this.shouldReconnect(statusCode);
+
+            this.logger.log(`Connection closed due to ${lastDisconnect?.error}, reconnecting: ${shouldReconnect}`);
+
+            if (!shouldReconnect) {
+                this.logger.log(`Stopping reconnection attempts for user ${userId}`);
+                this.socketMap.delete(userId);
+                await this.deleteSession(userId);
+                return;
+            }
+
+            if (statusCode === DisconnectReason.restartRequired) {
+                await this.immediateReconnect(userId);
+            } else {
+                await this.reconnectWithBackoff(userId);
             }
         });
 
-        socket.ev.on('creds.update', async () => {
-            try {
-                await saveCreds();
-            } catch (error) {
-                this.logger.error(`Failed to save credentials for user ${userId}`, error);
-            }
-        });
+        socket.ev.on('creds.update', saveCreds);
 
         socket.ev.on('groups.upsert', (groupMetadata) => {
-            for (const metadata of groupMetadata) {
-                this.groupMetadataCache.set(metadata.id, metadata);
-            }
+            groupMetadata.forEach(metadata => this.groupMetadataCache.set(metadata.id, metadata));
         });
 
         socket.ev.on('groups.update', (groupMetadata) => {
-            for (const metadata of groupMetadata) {
+            groupMetadata.forEach(metadata => {
                 const cachedMetadata = this.groupMetadataCache.get<GroupMetadata>(metadata.id);
                 if (cachedMetadata) {
                     this.groupMetadataCache.set(metadata.id, { ...cachedMetadata, ...metadata });
                 }
-            }
+            });
         });
     }
 
-    private shouldReconnect(statusCode: number | undefined): boolean {
-        return statusCode !== DisconnectReason.loggedOut &&
-            statusCode !== DisconnectReason.timedOut;
+    private async generateQRBase64(qr: string): Promise<string> {
+        try {
+            const qrBuffer = await qrcode.toBuffer(qr, {
+                errorCorrectionLevel: 'H',
+                type: 'png',
+                margin: 1,
+                scale: 8
+            });
+            return `data:image/png;base64,${qrBuffer.toString('base64')}`;
+        } catch (error) {
+            this.logger.error('Failed to generate QR code', error);
+            throw error;
+        }
     }
 
-    private getExponentialBackoffDelay(statusCode: number | undefined): number {
-        const baseDelay = 5000; // 5 seconds
-        const maxDelay = 300000; // 5 minutes
-        const factor = statusCode === DisconnectReason.restartRequired ? 1.5 : 2;
+    private shouldReconnect(statusCode: number | undefined): boolean {
+        return ![DisconnectReason.loggedOut, DisconnectReason.timedOut, DisconnectReason.badSession].includes(statusCode);
+    }
+
+    private async immediateReconnect(userId: string): Promise<void> {
+        this.logger.log(`Immediate reconnect for user ${userId}`);
+        await this.makeSocket(userId);
+    }
+
+    private async reconnectWithBackoff(userId: string): Promise<void> {
         const attemptCount = this.msgRetryCounterCache.get('reconnectAttempts') as number || 0;
+        const delay = this.calculateBackoffDelay(attemptCount);
+
+        this.logger.log(`Reconnecting for user ${userId} in ${delay}ms (attempt ${attemptCount + 1})`);
+
         this.msgRetryCounterCache.set('reconnectAttempts', attemptCount + 1);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+        await this.makeSocket(userId);
+    }
+
+    private calculateBackoffDelay(attemptCount: number): number {
+        const baseDelay = 5000;
+        const maxDelay = 300000;
+        const factor = 2;
         return Math.min(baseDelay * Math.pow(factor, attemptCount), maxDelay);
     }
 
     private scheduleSocketRenewal(userId: string) {
-        setTimeout(() => {
-            this.logger.log(`Renewing socket for user ${userId}`);
-            this.closeAndRenewSocket(userId);
-        }, 20 * 60 * 1000); // 20 minutes
+        const renewalTime = 20 * 60 * 1000; // 20 minutes
+        setTimeout(() => this.closeAndRenewSocket(userId), renewalTime);
     }
 
     private async closeAndRenewSocket(userId: string) {
-        try {
-            const oldSocket = this.socketMap.get(userId);
-            if (oldSocket) {
-                oldSocket.end(new Error('Scheduled socket renewal'));
-                this.socketMap.delete(userId);
-            }
-            await this.makeSocket(userId);
-        } catch (error) {
-            this.logger.error(`Failed to renew socket for user ${userId}`, error);
+        this.logger.log(`Renewing socket for user ${userId}`);
+        const oldSocket = this.socketMap.get(userId);
+        if (oldSocket) {
+            oldSocket.end(new Error('Scheduled socket renewal'));
+            this.socketMap.delete(userId);
         }
     }
 
     private async getUserSessionStorage(instance: InstanceEntity): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
         const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${instance.id}`;
 
+        const storageHandlers = {
+            REDIS: () => this.getRedisAuthState(sessionName),
+            POSTGRESQL: () => this.getPostgresAuthState(sessionName),
+            MONGODB: () => this.getMongoAuthState(sessionName),
+            default: () => useMultiFileAuthState(sessionName),
+        };
+
+        const handler = storageHandlers[instance.sessionStorage] || storageHandlers.default;
+
         try {
-            switch (instance.sessionStorage) {
-                case "REDIS":
-                    return await this.getRedisAuthState(sessionName);
-                case "POSTGRESQL":
-                    return await this.getPostgresAuthState(sessionName);
-                case "MONGODB":
-                    return await this.getMongoAuthState(sessionName);
-                default:
-                    this.logger.warn(`Unknown storage type: ${instance.sessionStorage}. Using MultiFileAuth as fallback.`);
-                    return await useMultiFileAuthState(sessionName);
-            }
+            return await handler();
         } catch (error) {
             this.logger.error(`Failed to get auth state for ${instance.sessionStorage}`, error);
             this.logger.log(`Falling back to MultiFileAuth for session: ${sessionName}`);
-            return await useMultiFileAuthState(sessionName);
+            return storageHandlers.default();
         }
     }
 
     private async getRedisAuthState(sessionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
-        const redisHost = this.configService.get<string>("REDIS_HOST");
-        const redisPort = this.configService.get<number>("REDIS_PORT");
-        const redisPassword = this.configService.get<string>("REDIS_PASSWORD");
+        const { host, port, password } = this.getRedisConfig();
+        return await useRedisAuthState({ host, port, password }, sessionName);
+    }
 
-        if (!redisHost || !redisPort || !redisPassword) {
+    private getRedisConfig() {
+        const host = this.configService.get<string>("REDIS_HOST");
+        const port = this.configService.get<number>("REDIS_PORT");
+        const password = this.configService.get<string>("REDIS_PASSWORD");
+
+        if (!host || !port || !password) {
             throw new Error("Redis configuration is incomplete");
         }
 
-        return await useRedisAuthState({ host: redisHost, port: redisPort, password: redisPassword }, sessionName);
+        return { host, port, password };
     }
 
     private async getPostgresAuthState(sessionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
-        const postgresConfig = this.configService.get("POSTGRES_CONFIG");
-        if (!postgresConfig) {
-            throw new Error("PostgreSQL configuration is missing");
-        }
-
-        return await usePostgreSQLAuthState(postgresConfig, sessionName);
+        return await usePostgreSQLAuthState(this.pgPool, sessionName);
     }
 
     private async getMongoAuthState(sessionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> {
@@ -224,5 +242,50 @@ export class SocketService {
 
         const client = this.mongoDb.getConnectedClient().db(this.configService.get<string>("SESSION_STORAGE_NAME", "default")).collection<AuthDocument>(sessionName);
         return await useMongoDBAuthState(client);
+    }
+
+    private async deleteSession(userId: string): Promise<void> {
+        const users = await this.instanceDB.findInstancesByUserId(userId);
+        if (!users?.length) return;
+
+        const instance = users[0];
+        const sessionName = `${this.configService.get<string>("SESSION_STORAGE_NAME", "default")}/${instance.id}`;
+
+        const deletionHandlers = {
+            REDIS: () => this.deleteRedisSession(sessionName),
+            POSTGRESQL: () => this.deletePostgresSession(sessionName),
+            MONGODB: () => this.deleteMongoSession(sessionName),
+            default: () => this.deleteMultiFileSession(sessionName),
+        };
+
+        const handler = deletionHandlers[instance.sessionStorage] || deletionHandlers.default;
+        await handler();
+    }
+
+    private async deleteRedisSession(sessionName: string): Promise<void> {
+        const { host, port, password } = this.getRedisConfig();
+        const { deleteSession } = await useRedisAuthState({ host, port, password }, sessionName);
+        await deleteSession();
+    }
+
+    private async deletePostgresSession(sessionName: string): Promise<void> {
+        const { deleteSession } = await usePostgreSQLAuthState(this.pgPool, sessionName);
+        await deleteSession();
+    }
+
+    private async deleteMongoSession(sessionName: string): Promise<void> {
+        const client = this.mongoDb.getConnectedClient().db(this.configService.get<string>("SESSION_STORAGE_NAME", "default")).collection<AuthDocument>(sessionName);
+        await client.deleteMany({});
+    }
+
+    private async deleteMultiFileSession(sessionName: string): Promise<void> {
+        const fs = await import('fs/promises');
+        const path = await import('path');
+
+        try {
+            await fs.rm(path.join(process.cwd(), sessionName), { recursive: true, force: true });
+        } catch (error) {
+            this.logger.error(`Failed to delete multi-file session: ${sessionName}`, error);
+        }
     }
 }

@@ -6,9 +6,10 @@ import { PostgreSQLService } from "src/Common/Database-Management/PostgreSQL/pos
 import { MongoDBService } from "src/Common/Database-Management/MongoDB/mongoDB-service";
 import { InstanceRepository } from "src/Common/Repositorys/instance-repository";
 import { PrismaService } from "src/Common/Database-Management/Prisma/prisma-service";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 @Module({
-    providers: [SocketService, LoggerService, PostgreSQLService, MongoDBService, InstanceRepository, PrismaService],
+    providers: [SocketService, LoggerService, PostgreSQLService, MongoDBService, InstanceRepository, PrismaService, EventEmitter2],
     controllers: [WhatsappController]
 })
 
