@@ -10,7 +10,7 @@ async function bootstrap() {
     origin: process.env.CORS_ORIGIN?.split(',') || ['*'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
-    credentials: true
+    credentials: true,
   });
   app.useGlobalFilters(new GlobalExceptionFilter());
   const logger = await app.resolve(LoggerService);

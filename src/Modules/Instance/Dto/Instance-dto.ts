@@ -5,47 +5,47 @@ import { JwtPayload } from 'src/Modules/Auth/Dto/Auth-Dto';
 import { Request } from 'express';
 
 export class CreateInstanceDto {
-    @IsNotEmpty()
-    @IsString()
-    name: string;
+  @IsNotEmpty()
+  @IsString()
+  name: string;
 
-    @IsString()
-    businessName?: string;
+  @IsString()
+  businessName?: string;
 
-    @IsString()
-    businessWhatsAppNo?: string;
+  @IsString()
+  businessWhatsAppNo?: string;
 
-    @IsString()
-    businessCountry?: string;
+  @IsString()
+  businessCountry?: string;
 
-    @IsNotEmpty()
-    environment: InstanceEnvironment;
+  @IsNotEmpty()
+  environment: InstanceEnvironment;
 
-    @IsNotEmpty()
-    sessionStorage: SessionStorageType;
+  @IsNotEmpty()
+  sessionStorage: SessionStorageType;
 }
 
 export class UpdateInstanceDto {
-    @IsString()
-    name?: string;
+  @IsString()
+  name?: string;
 
-    @IsString()
-    businessName?: string;
+  @IsString()
+  businessName?: string;
 
-    @IsString()
-    businessWhatsAppNo?: string;
+  @IsString()
+  businessWhatsAppNo?: string;
 
-    @IsString()
-    businessCountry?: string;
+  @IsString()
+  businessCountry?: string;
 
-    environment?: InstanceEnvironment;
+  environment?: InstanceEnvironment;
 
-    sessionStorage?: SessionStorageType;
+  sessionStorage?: SessionStorageType;
 
-    @IsBoolean()
-    isActive?: boolean;
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export interface AuthenticatedRequest extends Request {
-    user: JwtPayload;
+  user: JwtPayload;
 }

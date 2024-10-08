@@ -4,12 +4,12 @@ import { LoggerService } from 'src/Helpers/Logger/logger-service';
 
 @Module({})
 export class MongoDBModule {
-    static forRoot(): DynamicModule {
-        return {
-            module: MongoDBModule,
-            providers: [MongoDBService, LoggerService],
-            exports: [MongoDBService],
-            global: true
-        };
-    }
+  static forRoot(): DynamicModule {
+    return {
+      module: MongoDBModule,
+      providers: [MongoDBService, LoggerService],
+      exports: [MongoDBService],
+      global: true,
+    };
+  }
 }

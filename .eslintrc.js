@@ -17,7 +17,7 @@ module.exports = {
   },
   ignorePatterns: ['.eslintrc.js'],
   rules: {
-    "endOfLine": "auto", // Fix for Delete `CR` Pop up Error VS Code
+    "endOfLine": 0, // Fix for Delete `CR` Pop up Error VS Code
 
     // TypeScript specific rules
     '@typescript-eslint/interface-name-prefix': 'off',

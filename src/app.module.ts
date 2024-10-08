@@ -11,20 +11,20 @@ import { PostgresSQLModule } from './Common/Database-Management/PostgreSQL/postg
 import { MongoDBModule } from './Common/Database-Management/MongoDB/mongoDB-module';
 
 @Module({
-    imports: [
-        ConfigModule.forRoot({
-            isGlobal: true,
-            envFilePath: '.env',
-        }),
-        AuthModule,
-        HelperModule,
-        PrismaModule,
-        PostgresSQLModule,
-        MongoDBModule,
-        CommonModule,
-        InstanceModule,
-        FileModule,
-        WhatsappModule
-    ],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    AuthModule,
+    HelperModule,
+    PrismaModule,
+    PostgresSQLModule,
+    MongoDBModule,
+    CommonModule,
+    InstanceModule,
+    FileModule,
+    WhatsappModule,
+  ],
 })
-export class AppModule { }
+export class AppModule {}
